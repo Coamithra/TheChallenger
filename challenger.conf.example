@@ -48,7 +48,7 @@ CHALLENGER_PROJECTS=C:\code\my-project;C:\code\another-project
 # The defaults below are the tested ones; change them only if something about
 # the behaviour bothers you. Full explanations are in README.md.
 
-# CHALLENGER_MIN_CHARS=1000            # shorter responses are never edited
+# CHALLENGER_MIN_CHARS=1750            # shorter responses are never edited
 # CHALLENGER_TARGET_MODEL=claude-opus-5 # model prefix to edit; "claude-" for all
 # CHALLENGER_MAX_ASK_ROUNDS=2          # editor clarification rounds before giving up
 # CHALLENGER_TIMEOUT=300               # seconds; stay under the hook timeout (360)

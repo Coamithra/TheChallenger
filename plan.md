@@ -22,7 +22,7 @@ User prompt
  Stop hook fires → challenger_hook.py (command hook)
      │
      ├─ cwd not in ENABLED_PROJECTS? ─► allow (~70ms)
-     ├─ < 1000 chars? ────────────────► allow
+     ├─ < 1750 chars? ────────────────► allow
      ├─ session model not Opus 5? ────► allow (sniffed from transcript tail)
      ▼
  editor call (backend-selectable)       ← default: OpenAI gpt-5.6-sol via the
@@ -57,7 +57,7 @@ Key facts from the hooks docs that shaped this (verified against live docs, Aug 
 
 ### `challenger_hook.py` — the hook (command type)
 
-Reads the Stop payload from stdin. Programmatic gates: project allowlist (`ENABLED_PROJECTS`, cwd-prefix match), length (`MIN_CHARS = 1000`, skipped on continuation stops), and session model (`TARGET_MODEL_PREFIX = "claude-opus-5"` — Fable/Sonnet/older Opus are never touched). Past the gates it invokes the editor, then acts on its decision: `echo_to_user` blocks with "post this verbatim" and lets the next Stop through (state phase "echo"); `ask_model` blocks with the questions, stores the exchange in the state file, and re-invokes the editor with the answers on the next Stop (max `MAX_ASK_ROUNDS = 2`, then the original ships). Fails open on any error/timeout/unparseable output, logs every decision to `hook-debug.log`.
+Reads the Stop payload from stdin. Programmatic gates: project allowlist (`ENABLED_PROJECTS`, cwd-prefix match), length (`MIN_CHARS` = 1750 by default, skipped on continuation stops), and session model (`TARGET_MODEL_PREFIX = "claude-opus-5"` — Fable/Sonnet/older Opus are never touched). Past the gates it invokes the editor, then acts on its decision: `echo_to_user` blocks with "post this verbatim" and lets the next Stop through (state phase "echo"); `ask_model` blocks with the questions, stores the exchange in the state file, and re-invokes the editor with the answers on the next Stop (max `MAX_ASK_ROUNDS = 2`, then the original ships). Fails open on any error/timeout/unparseable output, logs every decision to `hook-debug.log`.
 
 ### `critic-prompt.md` — the editor's instructions
 
@@ -83,7 +83,7 @@ Earlier per-project wirings (`TheChallenger/.claude/settings.json`, `RotEA26/.cl
 
 Known coverage limit: farmed background card agents end with `SubagentStop`, not `Stop`, so they're never challenged regardless of configuration — deliberate, since their output goes to the overseer agent, not the user. The overseer session's own responses are challenged.
 
-All decisions from every project land in this project's `hook-debug.log` (self-rotating past 512KB). To gate Opus 5 output everywhere, copy the same `Stop` hook entry into `~/.claude/settings.json` (user-level settings merge with project-level ones); the script already uses absolute paths for everything it reads, so it works from any cwd. Costs to know before going global: every Opus 5 response over 1000 chars in any project pays an Opus 4.6 critique (~10-45s after the response renders, subscription-billed), and blocks trigger revision turns in the main session. Roll back by deleting the entry again.
+All decisions from every project land in this project's `hook-debug.log` (self-rotating past 512KB). To gate Opus 5 output everywhere, copy the same `Stop` hook entry into `~/.claude/settings.json` (user-level settings merge with project-level ones); the script already uses absolute paths for everything it reads, so it works from any cwd. Costs to know before going global: every Opus 5 response over the length gate in any project pays an Opus 4.6 critique (~10-45s after the response renders, subscription-billed), and blocks trigger revision turns in the main session. Roll back by deleting the entry again.
 
 ## Status
 
@@ -103,7 +103,7 @@ All decisions from every project land in this project's `hook-debug.log` (self-r
 14. ~~Cross-vendor critic backend~~ — done: OpenAI (gpt-5.6-sol via the codex CLI bridge) is the default critic, on the reasoning that a non-Claude judge can't share Claude's stylistic blind spots; validated on the dense/high-level pair (blocks the dense original on the same passages the Claude critics flagged, passes the rewrite, 2-4x faster); Claude backend retained behind `CHALLENGER_CRITIC=claude`
 15. ~~Prompt slimmed to ChatGPT register~~ — done: the 110-line rubric replaced by a short "what do you think of the writing?" ask with the user's altitude preference baked in; validated on the dense/high-level pair on both backends — verdicts unchanged, findings sharper (both critics caught issues the rubric runs missed), categories now critic-chosen free labels
 16. ~~Editor architecture~~ — done: replaced critique-and-revise with the user's "Report Editor" design — the editor model rewrites the response into the final report directly (`echo_to_user`, delivered by the agent posting it verbatim) and may first ask the agent clarification questions (`ask_model`, bounded at 2 rounds, exchange threaded back to the editor). Severity gates and the polish pass are gone with the old flow. Validated: the dense RotEA26 report came back as a release-note rewrite that preserved every caveat (10s); a fabricated ambiguous report's clarification round produced a final report correctly incorporating all three answers (6s)
-17. Live tuning: threshold (1000 chars), max rounds (2), severity calibration, critic latency (~10-30s pass / ~45s block per invocation) — pending real Opus 5 sessions
+17. Live tuning: threshold (raised 1000 -> 1750 on 2026-08-27, short status updates were not worth an editor round trip), max rounds (2), severity calibration, critic latency (~10-30s pass / ~45s block per invocation) — pending real Opus 5 sessions
 
 ## Remaining considerations
 

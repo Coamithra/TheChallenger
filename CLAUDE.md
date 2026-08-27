@@ -43,7 +43,7 @@ The hook is registered once in `~/.claude/settings.json` (`Stop`, 360s timeout) 
 Gates run in order, cheapest first, and every one of them fails open:
 
 1. **Project** — cwd not under an enabled root, allow.
-2. **Length** — under `MIN_CHARS` (1000) and not a continuation, allow.
+2. **Length** — under `MIN_CHARS` (1750) and not a continuation, allow.
 3. **Model** — session model sniffed from the transcript tail; anything not `claude-opus-5*` is allowed untouched.
 
 Past the gates the response goes to the editor along with the user's last real prompt (extracted from the transcript, for register and altitude judgment). The editor returns one of two actions:

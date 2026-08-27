@@ -63,7 +63,7 @@ Tell the user which backend you are configuring and why. The default exists beca
 Give them what they need to answer well:
 
 - The hook is registered globally but only acts on sessions whose working directory is inside one of the roots they name. Everything else is untouched, at a cost of about 70ms per response.
-- Inside an enabled project, **every** Opus 5 response over 1000 characters costs one editor call (5-15 seconds) and one extra turn while the agent posts the rewrite. That is the real price, and it is per response, not per session.
+- Inside an enabled project, **every** Opus 5 response over 1750 characters costs one editor call (5-15 seconds) and one extra turn while the agent posts the rewrite. That is the real price, and it is per response, not per session.
 - Git worktrees under a listed root are covered automatically — they do not need separate entries.
 - This is trivially reversible: enabling or disabling a project later is one line in `challenger.conf`.
 

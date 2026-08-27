@@ -18,7 +18,7 @@ You ask for something
    Stop hook fires
         │
         ├─ project not enabled?  ─► allow (~70ms)
-        ├─ response under 1000 chars? ─► allow
+        ├─ response under 1750 chars? ─► allow
         ├─ session model isn't Opus 5? ─► allow
         ▼
    editor model reads the report + your original request

@@ -86,7 +86,7 @@ ENABLED_PROJECTS = [
     part.strip() for part in _env("CHALLENGER_PROJECTS").split(os.pathsep) if part.strip()
 ]
 
-MIN_CHARS = _env_int("CHALLENGER_MIN_CHARS", 1000)   # shorter responses are never edited
+MIN_CHARS = _env_int("CHALLENGER_MIN_CHARS", 1750)   # shorter responses are never edited
 MAX_ASK_ROUNDS = _env_int("CHALLENGER_MAX_ASK_ROUNDS", 2)  # clarification rounds before giving up
 TARGET_MODEL_PREFIX = _env("CHALLENGER_TARGET_MODEL", "claude-opus-5")  # only edit this model
 CRITIC_BACKEND = _env("CHALLENGER_CRITIC", "codex")  # "codex" (OpenAI) or "claude"
