@@ -10,6 +10,7 @@ This is a public repo (`Coamithra/TheChallenger`, MIT). Anything you add here sh
 
 ```
 challenger_hook.py     the whole implementation - Stop hook entry point (command hook)
+challenger_display_hook.py  optional MessageDisplay companion - hides drafts as they render
 critic-prompt.md       the editor model's system prompt (the "Report Editor" instructions)
 smoke_test.py          fake Stop payload -> real editor call; the end-to-end check
 schema.json            the editor's decision shape - documentation only, not loaded at runtime
@@ -63,7 +64,7 @@ State lives in `%TEMP%\challenger-<session_id>.json` and is cleared whenever a t
 
 **Fail open, always.** Any exception, timeout, unparseable editor output, or missing dependency allows the stop. A broken Challenger must never brick a session; `main()` is wrapped in a bare `except` that exits 0. This is the one invariant to protect when changing anything here.
 
-**Hooks cannot replace a rendered response.** The original is already on screen by the time the hook runs; the edited report arrives as a follow-up message. This is a platform constraint, not a choice.
+**Hooks cannot replace a rendered response.** The original is already on screen by the time the Stop hook runs; the edited report arrives as a follow-up message. This is a platform constraint, not a choice. The optional `challenger_display_hook.py` (`MessageDisplay` event, registered separately) works around it prospectively: it buffers candidate drafts as they render and collapses long ones to a placeholder before they are shown. It shares all config, gates, and state helpers by importing `challenger_hook`, and couples back through the `hidden_any` flag in `%TEMP%\challenger-display-<session_id>.json` — when set, an editor failure makes the Stop hook's `fail_open()` block once to have the agent repost the hidden draft instead of silently allowing. Display-only and best-effort: the interactive TUI currently ignores `displayContent` upstream, and the first turn of a fresh session always fails open (no model in the transcript yet).
 
 **Echo fidelity is unverified.** The stop that delivers the rewrite is allowed without review (phase `echo`), so an agent that appends commentary to the "verbatim" report is not caught. Watch for it when calibrating.
 

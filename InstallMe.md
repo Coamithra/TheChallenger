@@ -136,6 +136,17 @@ If it reports that the hook allowed the stop, `hook-debug.log` in the repo direc
 
 Every one of these fails open by design: the hook never blocks a session, it just stops editing.
 
+## Step 6b — Optional: hide the drafts (display companion)
+
+Offer this to the user, default off. `challenger_display_hook.py` registers on the `MessageDisplay` event and hides would-be-edited drafts as they render, so the edited report is the only version they read. Before offering, check both prerequisites:
+
+- Claude Code 2.1.152 or newer (`claude --version`).
+- Tell the user the honest platform status: print mode honors it fully; the desktop app applies it but may briefly flash the draft first; **the interactive terminal currently ignores it entirely** (anthropics/claude-code#83957) — a terminal-only user gains nothing today.
+
+Also tell them the two visible costs: in enabled projects, responses appear when they finish rather than streaming line by line, and the first response of a brand-new session is never hidden (fails open — the session's model cannot be read yet).
+
+If they want it, extend `register.py` from Step 5 with the same idempotent merge for a `MessageDisplay` entry running `challenger_display_hook.py` (absolute path, `"timeout": 10` — this hook runs per display flush and must stay fast). Everything else is shared: it reads the same `challenger.conf`, logs to the same `hook-debug.log`, and fails open on any error by showing the original text.
+
 ## Step 7 — Hand over
 
 Tell the user:

@@ -29,7 +29,7 @@ You ask for something
    returns the finished report ─► the agent posts it as its next message
 ```
 
-Hooks cannot replace a response that has already been rendered, so the edited report arrives as a follow-up message rather than in place of the original. That is a platform constraint and the main thing to know before installing.
+Hooks cannot replace a response that has already been rendered, so the edited report arrives as a follow-up message rather than in place of the original. That is a platform constraint and the main thing to know before installing. The optional display companion below can hide the draft as it renders, so you read one report instead of two.
 
 ## Install
 
@@ -57,6 +57,34 @@ Settings live in `challenger.conf` next to the hook, copied from [challenger.con
 
 Set `CHALLENGER_CRITIC=claude` to switch.
 
+## Hiding the draft (optional)
+
+`challenger_display_hook.py` is a second, optional hook on the `MessageDisplay` event (Claude Code 2.1.152+). It runs the same cheap gates as the Stop hook while a response is still rendering, buffers messages that might be edited, and on the message's last flush either shows the whole thing at once (too short to edit) or collapses it to a one-line placeholder — the edited report then arrives as the only version you actually read. This is display-only: the transcript and the model's context keep the original, and verbose mode still shows it.
+
+If the editor round fails after a draft was hidden, the Stop hook notices and has the agent repost the draft verbatim, so you never end up with just the placeholder.
+
+To enable it, register a second hook entry alongside the Stop one (same merge rules, same absolute-path convention):
+
+```json
+{
+  "hooks": {
+    "MessageDisplay": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"/absolute/path/to/challenger_display_hook.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Platform caveats, current as of Claude Code 2.1.220: the interactive terminal silently ignores `displayContent` ([#83957](https://github.com/anthropics/claude-code/issues/83957)), so there the companion changes nothing; the desktop app applies it but may flash the draft briefly before replacing it. Print mode (`-p`) honors it fully. Also, in enabled projects messages appear when they finish instead of streaming line by line, and the first response of a brand-new session is never hidden (the session's model cannot be read yet, so the hook fails open).
+
 ## House style
 
 The editor's entire personality is [critic-prompt.md](critic-prompt.md), in plain prose. It currently asks for high-level, outcome-oriented reports that preserve caveats, verification status, remaining manual actions, and useful references, while dropping implementation mechanics you did not ask for. If you want a different register — terser, more technical, a different language — change it there.
@@ -77,7 +105,7 @@ That file is tracked, though, so editing it in place will conflict the next time
 
 ## Uninstall
 
-Delete the `Stop` entry from `~/.claude/settings.json`. Nothing else on your machine was touched.
+Delete the `Stop` entry — and the `MessageDisplay` entry if you added the display companion — from `~/.claude/settings.json`. Nothing else on your machine was touched.
 
 ## License
 

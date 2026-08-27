@@ -109,6 +109,12 @@ ASK_INSTRUCTION = (
     f"{CHALLENGER_TAG} A report editor is preparing your report for the user and "
     "needs clarification first. Answer these questions directly and concisely:\n\n"
 )
+REPOST_INSTRUCTION = (
+    f"{CHALLENGER_TAG} The report editing round could not complete, and your "
+    "report had already been hidden from the user's screen pending the edit. "
+    "Post your report again verbatim as your next message - the full text, "
+    "no additions, no commentary:\n\n"
+)
 
 
 def log(message):
@@ -161,6 +167,41 @@ def save_state(session_id, state):
 def clear_state(session_id):
     try:
         os.remove(state_path(session_id))
+    except OSError:
+        pass
+
+
+# challenger_display_hook.py (the optional MessageDisplay companion) hides
+# would-be-edited drafts as they render and keeps its per-turn bookkeeping in a
+# second temp file. The Stop hook reads it to learn whether the draft the user
+# was supposed to see is currently hidden, and clears it when a turn resolves.
+# If the companion is not registered the file never exists and nothing changes.
+
+def display_state_path(session_id):
+    safe = "".join(c for c in session_id if c.isalnum() or c in "-_")
+    return os.path.join(tempfile.gettempdir(), f"challenger-display-{safe}.json")
+
+
+def load_display_state(session_id):
+    try:
+        with open(display_state_path(session_id), encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_display_state(session_id, state):
+    try:
+        with open(display_state_path(session_id), "w", encoding="utf-8") as f:
+            json.dump(state, f)
+    except OSError:
+        pass
+
+
+def clear_display_state(session_id):
+    try:
+        os.remove(display_state_path(session_id))
     except OSError:
         pass
 
@@ -328,6 +369,23 @@ def _run_codex(prompt):
     return result.stdout
 
 
+def fail_open(session_id, original=None, note=None) -> NoReturn:
+    """Allow the stop - unless the display hook hid a draft that now has no
+    edited replacement coming, in which case have the agent repost it. Without
+    this, an editor failure after the draft was hidden would leave the user
+    with nothing but the placeholder."""
+    if original and load_display_state(session_id).get("hidden_any"):
+        save_state(session_id, {"phase": "echo"})
+        log(f"repost: editor round failed but draft was hidden (session {session_id})")
+        block(
+            REPOST_INSTRUCTION + original,
+            "The Challenger: editor unavailable; asking the agent to repost the hidden report.",
+        )
+    clear_state(session_id)
+    clear_display_state(session_id)
+    allow(note)
+
+
 def dispatch(session_id, result, state):
     """Act on an editor decision. `state` carries original/user_context/exchange."""
     if result["action"] == "echo_to_user":
@@ -362,6 +420,7 @@ def main():
     if len(message) < MIN_CHARS and not revising:
         log(f"allow: {len(message)} chars < {MIN_CHARS} (session {session_id})")
         clear_state(session_id)
+        clear_display_state(session_id)
         allow()
 
     tail = read_transcript_tail(payload.get("transcript_path", ""))
@@ -369,6 +428,7 @@ def main():
     if not model or not model.startswith(TARGET_MODEL_PREFIX):
         log(f"allow: session model {model!r} is not {TARGET_MODEL_PREFIX}* (session {session_id})")
         clear_state(session_id)
+        clear_display_state(session_id)
         allow()
 
     state = load_state(session_id) if revising else {}
@@ -377,6 +437,7 @@ def main():
     if phase == "echo":
         log(f"allow: edited report delivered (session {session_id})")
         clear_state(session_id)
+        clear_display_state(session_id)
         allow("The Challenger: edited report delivered.")
 
     if phase == "ask":
@@ -389,15 +450,14 @@ def main():
             result = run_editor(state.get("original", message),
                                 state.get("user_context"), exchange)
             if result is None or result["action"] != "echo_to_user":
-                log(f"allow: clarification limit reached (session {session_id})")
-                clear_state(session_id)
-                allow("The Challenger: clarification limit reached; showing the original report.")
+                log(f"clarification limit reached (session {session_id})")
+                fail_open(session_id, state.get("original"),
+                          "The Challenger: clarification limit reached; showing the original report.")
             dispatch(session_id, result, state)
         result = run_editor(state.get("original", message),
                             state.get("user_context"), exchange)
         if result is None:
-            clear_state(session_id)
-            allow()
+            fail_open(session_id, state.get("original"))
         dispatch(session_id, result, state)
 
     # Fresh response (or revising with no/foreign state): edit it.
@@ -405,7 +465,7 @@ def main():
     state = {"original": message, "user_context": last_user_text(tail)}
     result = run_editor(message, state["user_context"])
     if result is None:
-        allow()
+        fail_open(session_id, message)
     dispatch(session_id, result, state)
 
 
