@@ -23,6 +23,7 @@ Fails open like everything here: any error displays the original delta.
 
 import json
 import os
+import re
 import sys
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -30,13 +31,19 @@ sys.path.insert(0, PROJECT_DIR)
 
 import challenger_hook as ch  # noqa: E402  (shared config, gates, state, logging)
 
-PLACEHOLDER = (
-    f"{ch.CHALLENGER_TAG} Draft report withheld; the edited version follows. "
-    "(The original is kept in the transcript: verbose mode / ctrl+o.)"
-)
+PLACEHOLDER = f"{ch.CHALLENGER_TAG} Draft report withheld; the edited version follows."
 ASK_PLACEHOLDER = (
     f"{ch.CHALLENGER_TAG} (answering the report editor's clarification questions)"
 )
+
+
+def foldout(summary, text):
+    """The hidden text, collapsed behind a click. The desktop app renders
+    <details> folded; the terminal TUI ignores displayContent altogether, so
+    nothing needs to degrade gracefully there. A literal closing tag inside
+    the text would end the foldout early - defuse it with a space."""
+    text = re.sub(r"(?i)</(\s*)details", r"</ \1details", text)
+    return f"<details><summary>{summary}</summary>\n\n{text}\n\n</details>"
 
 
 def emit(text):
@@ -103,12 +110,12 @@ def main():
         state["hidden_any"] = True
         ch.save_display_state(session_id, state)
         ch.log(f"display: collapsed ask-round answer, {len(text)} chars (session {session_id})")
-        emit(ASK_PLACEHOLDER)
+        emit(ASK_PLACEHOLDER + "\n\n" + foldout("Show the answers", text))
     if len(text) >= ch.MIN_CHARS:
         state["hidden_any"] = True
         ch.save_display_state(session_id, state)
         ch.log(f"display: withheld draft, {len(text)} chars (session {session_id})")
-        emit(PLACEHOLDER)
+        emit(PLACEHOLDER + "\n\n" + foldout("Show the original draft", text))
     ch.save_display_state(session_id, state)
     emit(text)  # too short to be edited: release it, just all at once
 

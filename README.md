@@ -59,7 +59,7 @@ Set `CHALLENGER_CRITIC=claude` to switch.
 
 ## Hiding the draft (optional)
 
-`challenger_display_hook.py` is a second, optional hook on the `MessageDisplay` event (Claude Code 2.1.152+). It runs the same cheap gates as the Stop hook while a response is still rendering, buffers messages that might be edited, and on the message's last flush either shows the whole thing at once (too short to edit) or collapses it to a one-line placeholder — the edited report then arrives as the only version you actually read. This is display-only: the transcript and the model's context keep the original, and verbose mode still shows it.
+`challenger_display_hook.py` is a second, optional hook on the `MessageDisplay` event (Claude Code 2.1.152+). It runs the same cheap gates as the Stop hook while a response is still rendering, buffers messages that might be edited, and on the message's last flush either shows the whole thing at once (too short to edit) or collapses it to a placeholder with the full draft tucked behind a click-to-expand foldout — the edited report then arrives as the only version you read by default, with the original one click away. This is display-only: the transcript and the model's context keep the original too, and verbose mode still shows it.
 
 If the editor round fails after a draft was hidden, the Stop hook notices and has the agent repost the draft verbatim, so you never end up with just the placeholder.
 
