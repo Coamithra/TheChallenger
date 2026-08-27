@@ -103,7 +103,11 @@ CHALLENGER_TAG = "[The Challenger]"
 ECHO_INSTRUCTION = (
     f"{CHALLENGER_TAG} A report editor has rewritten your report for the user. "
     "Post the edited report below verbatim as your next message - the full text, "
-    "no additions, no commentary, no mention of the editing process:\n\n"
+    "no additions, no commentary, no mention of the editing process. "
+    "One exception: if the rewrite gets facts wrong - invented details, dropped "
+    "caveats, broken citations - post your original report verbatim instead, "
+    "also without commentary. Style is the editor's call and is not grounds "
+    "for rejection.\n\n"
 )
 ASK_INSTRUCTION = (
     f"{CHALLENGER_TAG} A report editor is preparing your report for the user and "

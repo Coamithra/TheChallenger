@@ -99,7 +99,7 @@ That file is tracked, though, so editing it in place will conflict the next time
 
 **It costs a turn.** Every edited response is one editor call (roughly 5-15 seconds) plus one extra turn in which the agent posts the rewrite. There is no "this one was already fine" pass-through action; the editor always rewrites. If that feels wasteful, raise `CHALLENGER_MIN_CHARS`.
 
-**Echo fidelity is unverified.** The stop that delivers the rewrite is allowed without review, so an agent that appends its own commentary to the "verbatim" report is not caught.
+**Echo fidelity is unverified.** The stop that delivers the rewrite is allowed without review, so an agent that appends its own commentary to the "verbatim" report is not caught. The instruction does sanction one deviation: an agent that catches the editor getting facts wrong is told to post its original report verbatim instead — a fact-check of last resort, not a style veto.
 
 **Transcript parsing is best-effort.** Detecting the session model and your original request means reading Claude Code's session JSONL, whose format is internal and may change between versions. Both reads fail soft: the model gate skips editing, and the editor simply loses your request as context.
 
