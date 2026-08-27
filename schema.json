@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ChallengerEditorDecision",
+  "description": "Output the report editor must produce. Documentation only - not loaded at runtime; the hook validates the action/message fields itself.",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["echo_to_user", "ask_model"],
+      "description": "echo_to_user: message is the complete rewritten report, delivered to the user verbatim via the coding agent. ask_model: message is targeted clarification question(s) sent to the coding agent; the editor is re-invoked with the answers (bounded rounds)."
+    },
+    "message": {
+      "type": "string",
+      "description": "The finished report (echo_to_user) or the clarification questions (ask_model)."
+    }
+  },
+  "required": ["action", "message"],
+  "additionalProperties": false
+}

@@ -1,0 +1,11 @@
+# Local configuration - project paths and model choices are per machine.
+.env
+
+# Decision log: contains excerpts of your own sessions across every enabled project.
+hook-debug.log
+
+# Working notes and harvested source material, not part of the distribution.
+research/
+
+__pycache__/
+*.pyc
