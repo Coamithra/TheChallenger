@@ -1,5 +1,8 @@
-# Local configuration - project paths and model choices are per machine.
-.env
+# Local settings - project paths and model choices are per machine.
+challenger.conf
+
+# Your own copy of the editor prompt, so editing the register never conflicts.
+*.local.md
 
 # Decision log: contains excerpts of your own sessions across every enabled project.
 hook-debug.log

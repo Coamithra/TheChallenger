@@ -8,9 +8,9 @@ The Challenger is a `Stop` hook that sends the user's long Opus 5 responses to a
 
 Rules for this install:
 
-1. **Never guess which projects to enable.** Step 3 is a mandatory stop; you must have the user's explicit answer before writing `.env`.
+1. **Never guess which projects to enable.** Step 3 is a mandatory stop; you must have the user's explicit answer before writing `challenger.conf`.
 2. **Never overwrite `~/.claude/settings.json`.** It almost certainly contains the user's other hooks and settings. Merge, and back it up first.
-3. **Never commit or display the contents of the user's `.env`** beyond confirming the paths they gave you.
+3. **Never display or commit the contents of the user's `challenger.conf`** beyond confirming the paths they gave you.
 4. If a step fails, stop and tell the user what failed. A half-installed hook is not dangerous — the hook fails open — but a confused user is.
 
 Work through the steps in order and report at the end.
@@ -65,17 +65,17 @@ Give them what they need to answer well:
 - The hook is registered globally but only acts on sessions whose working directory is inside one of the roots they name. Everything else is untouched, at a cost of about 70ms per response.
 - Inside an enabled project, **every** Opus 5 response over 1000 characters costs one editor call (5-15 seconds) and one extra turn while the agent posts the rewrite. That is the real price, and it is per response, not per session.
 - Git worktrees under a listed root are covered automatically — they do not need separate entries.
-- This is trivially reversible: enabling or disabling a project later is one line in `.env`.
+- This is trivially reversible: enabling or disabling a project later is one line in `challenger.conf`.
 
 If they are unsure, recommend starting with **one** project where they read the reports carefully, living with it for a few days, and expanding from there. If it helps them decide, you may list plausible candidates from directories you can already see — but they must confirm; a listing is not an answer.
 
 What you need out of this step is a list of **absolute paths to project roots**. Verify each one exists before continuing, and ask about any that do not.
 
-## Step 4 — Write `.env`
+## Step 4 — Write `challenger.conf`
 
-Copy `.env.example` to `.env` next to `challenger_hook.py`, then set `CHALLENGER_PROJECTS` to the roots from Step 3, joined by the platform separator from Step 0. Set `CHALLENGER_CRITIC=claude` as well if Step 2 landed on the claude backend; the codex default needs no entry.
+Copy `challenger.conf.example` to `challenger.conf` next to `challenger_hook.py`, then set `CHALLENGER_PROJECTS` to the roots from Step 3, joined by the platform separator from Step 0. Set `CHALLENGER_CRITIC=claude` as well if Step 2 landed on the claude backend; the codex default needs no entry.
 
-Leave every other setting commented out. They are documented in `.env.example`, and the defaults are the tested ones.
+Leave every other setting commented out. They are documented in the example file, the defaults are the tested ones, and nothing secret belongs in this file — both backends authenticate through their own CLI.
 
 Confirm the file parses the way the hook will read it, from the repo directory:
 
@@ -143,7 +143,9 @@ Tell the user:
 - which projects are enabled, and which backend is running;
 - that the hook applies to **new** sessions — sessions already open when you registered it will not pick it up;
 - that the edited report arrives as a **follow-up message**, because hooks cannot replace a response that has already been rendered. The first time it fires it looks like the agent repeated itself in plainer language. That is the feature working.
-- how to change their mind: edit `CHALLENGER_PROJECTS` in `.env` to add or drop a project, edit `critic-prompt.md` to change the register of the reports, and delete the `Stop` entry from `~/.claude/settings.json` to remove it entirely.
+- how to change their mind: edit `CHALLENGER_PROJECTS` in `challenger.conf` to add or drop a project, and delete the `Stop` entry from `~/.claude/settings.json` to remove it entirely;
+- that updating is `git pull` in the repo directory — the clone *is* the installation, since the hook is registered by absolute path and nothing was copied elsewhere;
+- that to change the register of the reports they should copy `critic-prompt.md` to `critic-prompt.local.md` and set `CHALLENGER_PROMPT=critic-prompt.local.md` in their config, rather than editing the tracked file, which would conflict on their next update.
 
 ---
 
@@ -152,7 +154,7 @@ Tell the user:
 Without an agent, the same install is five steps:
 
 1. Clone this repo somewhere permanent.
-2. `cp .env.example .env`, then set `CHALLENGER_PROJECTS` to your project roots, separated by `;` (Windows) or `:` (macOS/Linux).
+2. `cp challenger.conf.example challenger.conf`, then set `CHALLENGER_PROJECTS` to your project roots, separated by `;` (Windows) or `:` (macOS/Linux).
 3. Have either the Codex CLI installed and logged in (default backend), or set `CHALLENGER_CRITIC=claude` to use Claude Code itself.
 4. Add this to the `hooks` object in `~/.claude/settings.json`, with the real absolute path, merging it into whatever is already there:
 

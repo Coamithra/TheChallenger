@@ -67,9 +67,9 @@ The user's own "Report Editor" prompt: turn the response into the report they sh
 
 Documents `{action: echo_to_user | ask_model, message}`. Documentation only — the hook validates the two fields itself.
 
-### `.env` — the configuration
+### `challenger.conf` — the settings
 
-Read by the hook at import from the file next to `challenger_hook.py`; real environment variables win over it. `CHALLENGER_PROJECTS` (os.pathsep-separated absolute roots) is the allowlist; everything else — gates, backend, models, timeout, log and prompt paths — has a tested default and needs no entry. `.env.example` documents every knob; `.env` itself is gitignored, since project paths are per machine.
+Read by the hook at import from the file next to `challenger_hook.py`; real environment variables win over it. `CHALLENGER_PROJECTS` (os.pathsep-separated absolute roots) is the allowlist and `CHALLENGER_CRITIC` picks the backend; everything else — gates, models, timeout, log and prompt paths — has a tested default and needs no entry. Not named `.env` because nothing secret goes in it: both backends authenticate through their own CLI. `challenger.conf.example` is the documented copy; the real file is gitignored, as is `*.local.md`, so a user's own `critic-prompt.local.md` survives updates too.
 
 ### The wiring
 
@@ -77,7 +77,7 @@ One command hook on `Stop` in `~/.claude/settings.json` running `challenger_hook
 
 ## Deployment scope
 
-Deployed globally since 2026-08-26: one `Stop` hook entry in `~/.claude/settings.json` runs the script for every session on the machine, and `CHALLENGER_PROJECTS` in `.env` decides by cwd-prefix match which projects are actually challenged. To enable another project, add its root to that line — no settings files needed anywhere, and worktrees under an enabled root are covered automatically (prefix match). Sessions in non-enabled projects pay ~70ms per stop (interpreter startup; the check itself is a string comparison, first gate, before any file IO). The live list lives in the local `.env`, which is gitignored, so it is not recorded here.
+Deployed globally since 2026-08-26: one `Stop` hook entry in `~/.claude/settings.json` runs the script for every session on the machine, and `CHALLENGER_PROJECTS` in `challenger.conf` decides by cwd-prefix match which projects are actually challenged. To enable another project, add its root to that line — no settings files needed anywhere, and worktrees under an enabled root are covered automatically (prefix match). Sessions in non-enabled projects pay ~70ms per stop (interpreter startup; the check itself is a string comparison, first gate, before any file IO). The live list lives in the local `challenger.conf`, which is gitignored, so it is not recorded here.
 
 Earlier per-project wirings (`TheChallenger/.claude/settings.json`, `RotEA26/.claude/settings.local.json`) were removed as redundant.
 

@@ -20,12 +20,16 @@ from typing import NoReturn
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def _load_dotenv(path):
-    """Minimal .env reader: KEY=VALUE lines, # comments, optional surrounding quotes.
+def _load_config(path):
+    """Minimal KEY=VALUE reader: # comments, optional surrounding quotes.
 
-    No dependency on python-dotenv - a hook that runs on every stop should not
-    need a virtualenv. A real environment variable always wins over the file, so
-    a session can override any setting without editing anything.
+    Settings only - no credentials live here; both editor backends authenticate
+    through their own CLI. Values are pushed into the environment, so a real
+    environment variable always wins over the file and any setting can be
+    overridden for a single run without editing anything.
+
+    No dependency on python-dotenv: a hook that runs on every stop should not
+    need a virtualenv.
     """
     try:
         with open(path, encoding="utf-8") as f:
@@ -44,7 +48,7 @@ def _load_dotenv(path):
             os.environ[key] = value
 
 
-_load_dotenv(os.path.join(PROJECT_DIR, ".env"))
+_load_config(os.path.join(PROJECT_DIR, "challenger.conf"))
 
 
 def _env(name, default=""):
@@ -59,13 +63,23 @@ def _env_int(name, default):
         return default
 
 
-EDITOR_PROMPT_PATH = _env("CHALLENGER_PROMPT", os.path.join(PROJECT_DIR, "critic-prompt.md"))
+def _env_path(name, default):
+    """Like _env, but relative paths resolve against the repo, not the session.
+
+    The hook runs with the *session's* working directory, so a relative path in
+    challenger.conf would otherwise point at whatever project is being edited.
+    """
+    value = _env(name, default)
+    return value if os.path.isabs(value) else os.path.join(PROJECT_DIR, value)
+
+
+EDITOR_PROMPT_PATH = _env_path("CHALLENGER_PROMPT", "critic-prompt.md")
 CRITIC_SETTINGS_PATH = os.path.join(PROJECT_DIR, "critic-settings.json")
-LOG_PATH = _env("CHALLENGER_LOG", os.path.join(PROJECT_DIR, "hook-debug.log"))
+LOG_PATH = _env_path("CHALLENGER_LOG", "hook-debug.log")
 
 # The hook is registered globally (~/.claude/settings.json), so it runs for every
 # session on the machine; this list is what actually decides which ones are edited.
-# Set CHALLENGER_PROJECTS in .env to an os.pathsep-separated list of absolute
+# Set CHALLENGER_PROJECTS in challenger.conf to an os.pathsep-separated list of
 # project roots (";" on Windows, ":" elsewhere). Empty list = the Challenger is
 # installed but inert. Worktrees under an enabled root are covered by prefix match.
 ENABLED_PROJECTS = [
@@ -78,7 +92,7 @@ TARGET_MODEL_PREFIX = _env("CHALLENGER_TARGET_MODEL", "claude-opus-5")  # only e
 CRITIC_BACKEND = _env("CHALLENGER_CRITIC", "codex")  # "codex" (OpenAI) or "claude"
 CRITIC_MODEL = _env("CHALLENGER_CRITIC_MODEL", "claude-fable-5")  # claude backend
 CLAUDE_BIN = _env("CHALLENGER_CLAUDE_BIN", "claude")
-CODEX_BRIDGE = _env("CHALLENGER_CODEX_BRIDGE", os.path.join(PROJECT_DIR, "vendor", "ask_codex.py"))
+CODEX_BRIDGE = _env_path("CHALLENGER_CODEX_BRIDGE", os.path.join("vendor", "ask_codex.py"))
 CODEX_MODEL = _env("CHALLENGER_CODEX_MODEL", "gpt-5.6-sol")
 CODEX_EFFORT = _env("CHALLENGER_CODEX_EFFORT", "high")  # try lowering once happy
 CRITIC_NAME = CODEX_MODEL if CRITIC_BACKEND == "codex" else CRITIC_MODEL

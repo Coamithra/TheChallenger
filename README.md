@@ -39,13 +39,15 @@ Point your local Claude Code at [InstallMe.md](InstallMe.md):
 claude "read InstallMe.md in this repo and set The Challenger up for me"
 ```
 
-It will check your prerequisites, ask which projects you want edited, write your `.env`, register the hook, and run a smoke test. Manual install is in the same file if you would rather do it yourself.
+It will check your prerequisites, ask which projects you want edited, write your `challenger.conf`, register the hook, and run a smoke test. Manual install is in the same file if you would rather do it yourself.
 
 ## Configuration
 
-Everything lives in `.env` next to the hook; [.env.example](.env.example) documents every knob. The one that matters:
+Settings live in `challenger.conf` next to the hook, copied from [challenger.conf.example](challenger.conf.example). No credentials go in it — both backends authenticate through their own CLI — and it is gitignored, so `git pull` never disturbs your setup. Two settings matter:
 
 `CHALLENGER_PROJECTS` is a path-separated list of absolute project roots. The hook is registered globally, so it runs for every session on your machine, but only sessions whose cwd is under one of these roots are edited. Everything else exits at the first gate. Adding a project is one line; there is nothing to configure inside the project itself, and git worktrees beneath a listed root are covered automatically.
+
+`CHALLENGER_CRITIC` picks the editor backend, below. Everything else — the length gate, the model gate, timeouts, model ids — has a tested default and only needs an entry if you want to change it.
 
 ## Editor backends
 
@@ -57,7 +59,9 @@ Set `CHALLENGER_CRITIC=claude` to switch.
 
 ## House style
 
-The editor's entire personality is [critic-prompt.md](critic-prompt.md), in plain prose. It currently asks for high-level, outcome-oriented reports that preserve caveats, verification status, remaining manual actions, and useful references, while dropping implementation mechanics you did not ask for. If you want a different register — terser, more technical, a different language — edit that file. Nothing else needs to change.
+The editor's entire personality is [critic-prompt.md](critic-prompt.md), in plain prose. It currently asks for high-level, outcome-oriented reports that preserve caveats, verification status, remaining manual actions, and useful references, while dropping implementation mechanics you did not ask for. If you want a different register — terser, more technical, a different language — change it there.
+
+That file is tracked, though, so editing it in place will conflict the next time you `git pull`. Copy it alongside as `critic-prompt.local.md` (gitignored) and set `CHALLENGER_PROMPT=critic-prompt.local.md` in your config; your house style then survives every update.
 
 ## Design decisions worth knowing
 

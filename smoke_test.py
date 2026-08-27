@@ -50,7 +50,7 @@ def main():
     elif ch.ENABLED_PROJECTS:
         cwd = ch.ENABLED_PROJECTS[0]
     else:
-        sys.exit("No projects configured. Set CHALLENGER_PROJECTS in .env first.")
+        sys.exit("No projects configured. Set CHALLENGER_PROJECTS in challenger.conf first.")
 
     print(f"cwd:      {cwd}")
     print(f"enabled:  {ch.project_enabled(cwd)}")

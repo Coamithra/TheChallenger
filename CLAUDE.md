@@ -15,7 +15,8 @@ smoke_test.py          fake Stop payload -> real editor call; the end-to-end che
 schema.json            the editor's decision shape - documentation only, not loaded at runtime
 critic-settings.json   {"disableAllHooks": true}, passed to the Claude backend so it can't recurse
 vendor/ask_codex.py    vendored Codex CLI bridge (upstream: the standalone CodexCLI project)
-.env / .env.example    configuration; .env is gitignored because project paths are per machine
+challenger.conf        local settings, gitignored (challenger.conf.example is the documented copy)
+critic-prompt.local.md optional local override of the prompt; gitignored via *.local.md
 plan.md                design doc, architecture rationale, Status log, open considerations
 README.md              public overview
 InstallMe.md           install runbook written for a coding agent to execute
@@ -25,9 +26,13 @@ research/              archived prompts and harvested source material; gitignore
 
 ## Configuration
 
-Everything is env-driven, read from `.env` next to the hook by a ten-line parser (no python-dotenv — a hook that runs on every stop should not need a virtualenv). Real environment variables win over the file, so any setting can be overridden for one session without editing anything.
+Everything is env-driven, read from `challenger.conf` next to the hook by a ten-line KEY=VALUE parser (no python-dotenv — a hook that runs on every stop should not need a virtualenv). Values are pushed into the environment, so a real environment variable wins over the file. It is deliberately not called `.env`: no credentials go in it, since both backends authenticate through their own CLI.
 
-`CHALLENGER_PROJECTS` is the only setting with no useful default: an `os.pathsep`-separated list of absolute project roots. Empty means the Challenger is installed but inert. `.env.example` documents the rest and is the file to update when adding a knob.
+`CHALLENGER_PROJECTS` is the only setting with no useful default: an `os.pathsep`-separated list of absolute project roots. Empty means the Challenger is installed but inert. `challenger.conf.example` documents the rest and is the file to update when adding a knob.
+
+Path settings (`CHALLENGER_PROMPT`, `CHALLENGER_LOG`, `CHALLENGER_CODEX_BRIDGE`) go through `_env_path`, which resolves relative values against the repo — the hook runs with the *session's* cwd, so a bare `critic-prompt.local.md` would otherwise be looked up inside whatever project is being edited.
+
+`critic-prompt.md` is tracked, so users who want their own house style copy it to `critic-prompt.local.md` (gitignored via `*.local.md`) and point `CHALLENGER_PROMPT` at it. Keep that escape hatch working when touching prompt loading.
 
 ## How it runs
 

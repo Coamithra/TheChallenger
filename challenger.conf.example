@@ -1,0 +1,60 @@
+# The Challenger - settings
+#
+# Copy to `challenger.conf` (same folder as challenger_hook.py) and edit.
+# Settings only: no credentials live here. Both editor backends authenticate
+# through their own CLI (`codex login`, or whatever Claude Code already uses).
+#
+# This file is gitignored, so `git pull` never touches your setup. Values are
+# read into the environment, so a real environment variable wins over the file
+# and any setting can be overridden for a single run.
+
+
+# --- Which projects get edited (the one setting you must set) ----------------
+#
+# Absolute project roots, separated by your platform's path separator
+# (";" on Windows, ":" on macOS/Linux). A session is edited when its working
+# directory is one of these roots or anything beneath it, so git worktrees are
+# covered automatically. With this unset the Challenger is installed but inert.
+#
+# Everything outside these roots is waved through in ~70ms, which is why the
+# hook can safely be registered globally.
+
+CHALLENGER_PROJECTS=C:\code\my-project;C:\code\another-project
+# CHALLENGER_PROJECTS=/home/me/code/my-project:/home/me/code/another-project
+
+
+# --- Which model does the editing -------------------------------------------
+#
+# "codex" (default) runs OpenAI's gpt-5.6-sol through the vendored bridge and
+# needs the Codex CLI installed and logged in. An editor from a different
+# vendor does not share the stylistic habits of the model it is editing.
+#
+# "claude" runs `claude -p` with claude-fable-5 and needs nothing extra.
+
+# CHALLENGER_CRITIC=claude
+
+
+# --- Your own house style ----------------------------------------------------
+#
+# critic-prompt.md is tracked, so editing it in place will conflict on your next
+# update. To customise the register of your reports, copy it alongside as
+# critic-prompt.local.md (gitignored) and point this at it:
+
+# CHALLENGER_PROMPT=critic-prompt.local.md
+
+
+# --- Tuning ------------------------------------------------------------------
+#
+# The defaults below are the tested ones; change them only if something about
+# the behaviour bothers you. Full explanations are in README.md.
+
+# CHALLENGER_MIN_CHARS=1000            # shorter responses are never edited
+# CHALLENGER_TARGET_MODEL=claude-opus-5 # model prefix to edit; "claude-" for all
+# CHALLENGER_MAX_ASK_ROUNDS=2          # editor clarification rounds before giving up
+# CHALLENGER_TIMEOUT=300               # seconds; stay under the hook timeout (360)
+# CHALLENGER_CODEX_MODEL=gpt-5.6-sol
+# CHALLENGER_CODEX_EFFORT=high
+# CHALLENGER_CODEX_BRIDGE=vendor/ask_codex.py
+# CHALLENGER_CRITIC_MODEL=claude-fable-5  # claude backend
+# CHALLENGER_CLAUDE_BIN=claude
+# CHALLENGER_LOG=hook-debug.log
