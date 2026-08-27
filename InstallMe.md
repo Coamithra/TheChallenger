@@ -41,13 +41,14 @@ Record the absolute path to `challenger_hook.py`; Steps 4-6 all need it.
 
 Two backends, and the choice depends on what is already installed.
 
-**codex (default, recommended).** Uses OpenAI's `gpt-5.6-sol`. Check the CLI:
+**codex (default, recommended).** Uses OpenAI's `gpt-5.6-sol`. Check that the CLI is installed and logged in:
 
 ```bash
 codex --version
+codex login status
 ```
 
-If that works, the CLI is installed (`npm install -g @openai/codex` if not). Authentication is separate: the user must have run `codex login` themselves. **You cannot log them in — do not try.** If you are unsure whether their login is valid, note it and let the smoke test in Step 6 settle it.
+A missing CLI is fixed with `npm install -g @openai/codex`. Authentication is separate and prints something like `Logged in using ChatGPT` when it is good; anything else means the user must run `codex login` themselves. **You cannot log them in — do not try.** Ask them to do it, wait, and re-run the status check before continuing.
 
 **claude (fallback).** Uses `claude -p` with `claude-fable-5`. Nothing extra to install if Claude Code is on this machine. Choose this if the Codex CLI is missing and the user does not want to install it.
 
