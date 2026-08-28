@@ -23,8 +23,10 @@ Fails open like everything here: any error displays the original delta.
 
 import json
 import os
-import re
+import pathlib
 import sys
+import tempfile
+import time
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_DIR)
@@ -37,13 +39,48 @@ ASK_PLACEHOLDER = (
 )
 
 
-def foldout(summary, text):
-    """The hidden text, collapsed behind a click. The desktop app renders
-    <details> folded; the terminal TUI ignores displayContent altogether, so
-    nothing needs to degrade gracefully there. A literal closing tag inside
-    the text would end the foldout early - defuse it with a space."""
-    text = re.sub(r"(?i)</(\s*)details", r"</ \1details", text)
-    return f"<details><summary>{summary}</summary>\n\n{text}\n\n</details>"
+DRAFT_MAX_AGE = 3 * 86_400  # seconds a stashed draft survives in the temp dir
+
+
+def stash(label, text, session_id, message_id):
+    """Park the hidden text in a temp file and return a link line for it.
+
+    There is no foldout to hide it behind: the message stream renders no raw
+    HTML and has no collapsible syntax, so an earlier <details> attempt simply
+    printed the markup around the draft it was meant to hide. A link keeps the
+    draft one click away without putting it back on screen.
+
+    Returns "" if the file cannot be written - the placeholder then stands
+    alone, and the original is still in the transcript and in verbose mode.
+    """
+    try:
+        safe = "".join(c for c in f"{session_id}-{message_id}" if c.isalnum() or c in "-_")
+        path = os.path.join(tempfile.gettempdir(), f"challenger-draft-{safe[:80]}.md")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        _prune_drafts()
+        return f"\n\n[{label}]({pathlib.Path(path).as_uri()})"
+    except OSError as e:
+        ch.log(f"display: could not stash the draft: {e!r}")
+        return ""
+
+
+def _prune_drafts():
+    """Stashed drafts are read once if at all; sweep the stale ones."""
+    cutoff = time.time() - DRAFT_MAX_AGE
+    try:
+        entries = os.scandir(tempfile.gettempdir())
+    except OSError:
+        return
+    with entries:
+        for entry in entries:
+            if not entry.name.startswith("challenger-draft-"):
+                continue
+            try:
+                if entry.stat().st_mtime < cutoff:
+                    os.remove(entry.path)
+            except OSError:
+                pass
 
 
 def emit(text):
@@ -110,12 +147,12 @@ def main():
         state["hidden_any"] = True
         ch.save_display_state(session_id, state)
         ch.log(f"display: collapsed ask-round answer, {len(text)} chars (session {session_id})")
-        emit(ASK_PLACEHOLDER + "\n\n" + foldout("Show the answers", text))
+        emit(ASK_PLACEHOLDER + stash("Show the answers", text, session_id, message_id))
     if len(text) >= ch.MIN_CHARS:
         state["hidden_any"] = True
         ch.save_display_state(session_id, state)
         ch.log(f"display: withheld draft, {len(text)} chars (session {session_id})")
-        emit(PLACEHOLDER + "\n\n" + foldout("Show the original draft", text))
+        emit(PLACEHOLDER + stash("Show the original draft", text, session_id, message_id))
     ch.save_display_state(session_id, state)
     emit(text)  # too short to be edited: release it, just all at once
 

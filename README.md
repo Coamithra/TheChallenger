@@ -59,7 +59,7 @@ Set `CHALLENGER_CRITIC=claude` to switch.
 
 ## Hiding the draft (optional)
 
-`challenger_display_hook.py` is a second, optional hook on the `MessageDisplay` event (Claude Code 2.1.152+). It runs the same cheap gates as the Stop hook while a response is still rendering, buffers messages that might be edited, and on the message's last flush either shows the whole thing at once (too short to edit) or collapses it to a placeholder with the full draft tucked behind a click-to-expand foldout — the edited report then arrives as the only version you read by default, with the original one click away. This is display-only: the transcript and the model's context keep the original too, and verbose mode still shows it.
+`challenger_display_hook.py` is a second, optional hook on the `MessageDisplay` event (Claude Code 2.1.152+). It runs the same cheap gates as the Stop hook while a response is still rendering, buffers messages that might be edited, and on the message's last flush either shows the whole thing at once (too short to edit) or replaces it with a one-line placeholder and a link — the draft is written to a file in your temp directory and linked from the placeholder, so the edited report is the only version on screen and the original is one click away. Stashed drafts are swept after three days. This is display-only: the transcript and the model's context keep the original too, and verbose mode still shows it.
 
 If the editor round fails after a draft was hidden, the Stop hook notices and has the agent repost the draft verbatim, so you never end up with just the placeholder.
 
@@ -83,7 +83,7 @@ To enable it, register a second hook entry alongside the Stop one (same merge ru
 }
 ```
 
-Platform caveats, current as of Claude Code 2.1.220: the interactive terminal silently ignores `displayContent` ([#83957](https://github.com/anthropics/claude-code/issues/83957)), so there the companion changes nothing; the desktop app applies it but may flash the draft briefly before replacing it. Print mode (`-p`) honors it fully. Also, in enabled projects messages appear when they finish instead of streaming line by line, and the first response of a brand-new session is never hidden (the session's model cannot be read yet, so the hook fails open).
+Platform caveats, current as of Claude Code 2.1.246: the message stream renders no raw HTML and offers no collapsible syntax, so the placeholder links the draft out to a file rather than folding it inline — a `<details>` block arrives as visible markup wrapped around the very draft it was meant to hide. The interactive terminal silently ignores `displayContent` ([#83957](https://github.com/anthropics/claude-code/issues/83957)), so there the companion changes nothing; the desktop app applies it but may flash the draft briefly before replacing it. Print mode (`-p`) honors it fully. Also, in enabled projects messages appear when they finish instead of streaming line by line, and the first response of a brand-new session is never hidden (the session's model cannot be read yet, so the hook fails open).
 
 ## House style
 
