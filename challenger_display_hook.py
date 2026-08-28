@@ -23,8 +23,8 @@ Fails open like everything here: any error displays the original delta.
 
 import json
 import os
-import re
 import sys
+import time
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_DIR)
@@ -37,13 +37,59 @@ ASK_PLACEHOLDER = (
 )
 
 
-def foldout(summary, text):
-    """The hidden text, collapsed behind a click. The desktop app renders
-    <details> folded; the terminal TUI ignores displayContent altogether, so
-    nothing needs to degrade gracefully there. A literal closing tag inside
-    the text would end the foldout early - defuse it with a space."""
-    text = re.sub(r"(?i)</(\s*)details", r"</ \1details", text)
-    return f"<details><summary>{summary}</summary>\n\n{text}\n\n</details>"
+DRAFT_DIR = os.path.join(".claude", "challenger-drafts")
+DRAFT_MAX_AGE = 3 * 86_400  # seconds a stashed draft survives before the sweep
+
+
+def stash(label, text, cwd, session_id, message_id):
+    """Park the hidden text in a file and return a link line pointing at it.
+
+    There is no foldout to hide it behind: the message stream renders no raw
+    HTML and has no collapsible syntax, so an earlier <details> attempt simply
+    printed the markup around the draft it was meant to hide. A link keeps the
+    draft one click away instead - but the app only opens files under the
+    session's working directory, so the stash lives in the project rather than
+    the temp dir. The directory carries a "*" .gitignore, which ignores the
+    whole directory including itself: nothing appears in `git status` and the
+    project's own ignore rules are never touched.
+
+    Returns "" if the file cannot be written - the placeholder then stands
+    alone, and the original is still in the transcript and in verbose mode.
+    """
+    try:
+        directory = os.path.join(cwd, DRAFT_DIR)
+        os.makedirs(directory, exist_ok=True)
+        ignore = os.path.join(directory, ".gitignore")
+        if not os.path.exists(ignore):
+            with open(ignore, "w", encoding="utf-8") as f:
+                f.write("*\n")
+        safe = "".join(c for c in f"{session_id}-{message_id}" if c.isalnum() or c in "-_")
+        name = f"{safe[:80] or 'draft'}.md"
+        with open(os.path.join(directory, name), "w", encoding="utf-8") as f:
+            f.write(text)
+        _prune_drafts(directory)
+        return f"\n\n[{label}]({DRAFT_DIR.replace(os.sep, '/')}/{name})"
+    except OSError as e:
+        ch.log(f"display: could not stash the draft: {e!r}")
+        return ""
+
+
+def _prune_drafts(directory):
+    """Stashed drafts are read once if at all; sweep the stale ones."""
+    cutoff = time.time() - DRAFT_MAX_AGE
+    try:
+        entries = os.scandir(directory)
+    except OSError:
+        return
+    with entries:
+        for entry in entries:
+            if not entry.name.endswith(".md"):
+                continue
+            try:
+                if entry.stat().st_mtime < cutoff:
+                    os.remove(entry.path)
+            except OSError:
+                pass
 
 
 def emit(text):
@@ -79,7 +125,8 @@ def main():
     payload = json.loads(sys.stdin.buffer.read().decode("utf-8", errors="replace"))
     if payload.get("agent_id"):  # subagent output is not a user-facing report
         show()
-    if not ch.project_enabled(payload.get("cwd", "")):
+    cwd = payload.get("cwd", "")
+    if not ch.project_enabled(cwd):
         show()
 
     session_id = payload.get("session_id", "unknown")
@@ -110,12 +157,12 @@ def main():
         state["hidden_any"] = True
         ch.save_display_state(session_id, state)
         ch.log(f"display: collapsed ask-round answer, {len(text)} chars (session {session_id})")
-        emit(ASK_PLACEHOLDER + "\n\n" + foldout("Show the answers", text))
+        emit(ASK_PLACEHOLDER + stash("Show the answers", text, cwd, session_id, message_id))
     if len(text) >= ch.MIN_CHARS:
         state["hidden_any"] = True
         ch.save_display_state(session_id, state)
         ch.log(f"display: withheld draft, {len(text)} chars (session {session_id})")
-        emit(PLACEHOLDER + "\n\n" + foldout("Show the original draft", text))
+        emit(PLACEHOLDER + stash("Show the original draft", text, cwd, session_id, message_id))
     ch.save_display_state(session_id, state)
     emit(text)  # too short to be edited: release it, just all at once
 
