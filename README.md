@@ -29,7 +29,7 @@ You ask for something
    returns the finished report ─► the agent posts it as its next message
 ```
 
-Hooks cannot replace a response that has already been rendered, so the edited report arrives as a follow-up message rather than in place of the original. That is a platform constraint and the main thing to know before installing. The optional display companion below can hide the draft as it renders, so you read one report instead of two.
+Hooks cannot replace a response that has already been rendered, so by default the edited report arrives as a follow-up message rather than in place of the original. That is a platform constraint and the main thing to know before installing. The optional display companion below can hide the draft as it renders, and can go one further and draw the finished report in its place, so you read exactly one message.
 
 ## Install
 
@@ -62,6 +62,16 @@ Set `CHALLENGER_CRITIC=claude` to switch.
 `challenger_display_hook.py` is a second, optional hook on the `MessageDisplay` event (Claude Code 2.1.152+). It runs the same cheap gates as the Stop hook while a response is still rendering, buffers messages that might be edited, and on the message's last flush either shows the whole thing at once (too short to edit) or replaces it with a one-line placeholder and a link — the draft is written to `.claude/challenger-drafts/` in the project and linked from the placeholder, so the edited report is the only version on screen and the original is one click away. That directory gets a `.gitignore` containing `*`, which ignores the whole directory including itself, so it never shows up in `git status` and your own ignore rules are left alone; stashed drafts are swept after three days. This is display-only: the transcript and the model's context keep the original too, and verbose mode still shows it.
 
 If the editor round fails after a draft was hidden, the Stop hook notices and has the agent repost the draft verbatim, so you never end up with just the placeholder.
+
+### One message instead of two
+
+Set `CHALLENGER_DISPLAY_EDIT=1` and the companion runs the editor itself, drawing the finished report in place of the draft. There is no follow-up message: the Stop hook sees the report has already been delivered and simply allows. That saves a turn per report and removes the chance of the agent paraphrasing something it was told to post verbatim.
+
+It needs the `MessageDisplay` entry's `timeout` raised to `360`, matching the Stop entry. The platform default for that event is 10 seconds — measured in the 2.1.247 build, and a per-hook `timeout` does override it — which is less than the editor needs; leave it at 10 and every draft stalls and then shows raw.
+
+Two consequences worth knowing. Nothing available while a message renders can tell the turn's final report from a long mid-turn message: the payload's `final` flag marks the last flush of *that message*, the transcript does not yet contain the message being displayed, and the Stop hook runs strictly after display — a display hook that waits for it deadlocks until it times out. So every message over `CHALLENGER_MIN_CHARS` is edited, mid-turn ones included, and the editor is told the text may be a progress note rather than a report. And the agent never reads the rewrite, so its standing permission to reject one that invented details no longer applies; in its place the companion checks mechanically that every citation marker, file path, and backticked identifier in the report also appears in the draft or your request, and falls back to the placeholder-and-echo path when one does not. That check cannot catch invented prose.
+
+Clarification rounds keep the old shape: questions cannot be answered while a message is rendering, so the companion parks them for the Stop hook, which asks the agent without paying for a second editor call.
 
 To enable it, register a second hook entry alongside the Stop one (same merge rules, same absolute-path convention):
 
