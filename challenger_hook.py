@@ -5,8 +5,10 @@ and non-Opus-5 sessions are waved through programmatically. Anything else goes
 to a report editor (OpenAI gpt-5.6-sol via the codex CLI bridge by default,
 Claude via CHALLENGER_CRITIC=claude) that rewrites the response into the
 high-level report the user prefers. The editor may first ask the coding agent
-clarification questions (bounded rounds); its final report is delivered by
-having the agent post it verbatim. Fails open: any error allows the stop.
+clarification questions (bounded rounds). Its final report is delivered by
+having the agent post it verbatim, or - with CHALLENGER_DISPLAY_EDIT on -
+drawn by the display companion in place of the draft, leaving this hook
+nothing to do but allow. Fails open: any error allows the stop.
 """
 
 import json
@@ -97,6 +99,12 @@ CODEX_MODEL = _env("CHALLENGER_CODEX_MODEL", "gpt-5.6-sol")
 CODEX_EFFORT = _env("CHALLENGER_CODEX_EFFORT", "high")  # try lowering once happy
 CRITIC_NAME = CODEX_MODEL if CRITIC_BACKEND == "codex" else CRITIC_MODEL
 CRITIC_TIMEOUT = _env_int("CHALLENGER_TIMEOUT", 300)  # seconds; keep below the hook's own timeout
+# Let the display companion run the editor and draw the finished report in
+# place of the draft, instead of blocking for the agent to repost it. Off by
+# default: it only works if the MessageDisplay hook entry raises its timeout
+# past the editor's, and at the platform default of 10s every draft would
+# stall and then fail open to the raw text. See README.md.
+DISPLAY_EDIT = _env("CHALLENGER_DISPLAY_EDIT", "0").strip().lower() not in ("0", "false", "no", "")
 MAX_RESPONSE_CHARS = 100_000  # truncate pathological inputs to the editor
 
 CHALLENGER_TAG = "[The Challenger]"
@@ -292,10 +300,17 @@ def last_user_text(tail):
     return None
 
 
-def run_editor(original, user_context=None, exchange=None):
-    """Returns {"action": ..., "message": ...} or None on any failure (fail open)."""
+def run_editor(original, user_context=None, exchange=None, note=None):
+    """Returns {"action": ..., "message": ...} or None on any failure (fail open).
+
+    `note` is appended to the editor's instructions for this call alone - the
+    display companion uses it to warn that the text it is handing over may be
+    a mid-turn progress message rather than a finished report.
+    """
     with open(EDITOR_PROMPT_PATH, encoding="utf-8") as f:
         prompt = f.read()
+    if note:
+        prompt += "\n\n" + note
     if user_context:
         prompt += "\n\n--- USER'S REQUEST ---\n\n" + user_context[:4000]
     if exchange:
@@ -435,14 +450,44 @@ def main():
         clear_display_state(session_id)
         allow()
 
-    state = load_state(session_id) if revising else {}
+    # A continuation stop carries our own state forward. A fresh stop normally
+    # ignores whatever is left lying around, but the display companion writes
+    # these two phases before a stop has happened at all, so they are honoured
+    # either way.
+    state = load_state(session_id)
     phase = state.get("phase")
+    if not revising and phase not in ("delivered", "ask_pending"):
+        state, phase = {}, None
 
     if phase == "echo":
         log(f"allow: edited report delivered (session {session_id})")
         clear_state(session_id)
         clear_display_state(session_id)
         allow("The Challenger: edited report delivered.")
+
+    if phase == "delivered":
+        # The display companion already drew the edited report. There is no
+        # echo turn to ask for and nothing left to review.
+        log(f"allow: report edited in place at display time (session {session_id})")
+        clear_state(session_id)
+        clear_display_state(session_id)
+        allow(f"The Challenger: report edited by {CRITIC_NAME} and shown in place.")
+
+    if phase == "ask_pending":
+        # The display companion got questions instead of a report. It cannot
+        # answer them mid-render, so it parked them here: block with them now
+        # rather than paying for a second editor call to be asked again.
+        exchange = state.get("exchange", [])
+        questions = exchange[-1].get("q") if exchange else None
+        if not questions:
+            fail_open(session_id, state.get("original"))
+        state["phase"] = "ask"
+        save_state(session_id, state)
+        log(f"ask: clarification round 1, asked at display time (session {session_id})")
+        block(
+            ASK_INSTRUCTION + questions,
+            f"The Challenger: {CRITIC_NAME} asked for clarification (round 1).",
+        )
 
     if phase == "ask":
         exchange = state.get("exchange", [])

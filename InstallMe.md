@@ -4,7 +4,7 @@
 
 ## For the agent: what you are installing
 
-The Challenger is a `Stop` hook that sends the user's long Opus 5 responses to a second model, which rewrites them into a high-level report. It is registered once, globally, and gates on a list of project roots the user chooses. Your job is to get it configured, registered, and smoke-tested — and to leave the user's existing setup intact.
+The Challenger is a `Stop` hook that sends the user's long Opus 5 responses to a second model, which rewrites them for clarity while keeping the agent's own voice. It is registered once, globally, and gates on a list of project roots the user chooses. Your job is to get it configured, registered, and smoke-tested — and to leave the user's existing setup intact.
 
 Rules for this install:
 
@@ -146,6 +146,14 @@ Offer this to the user, default off. `challenger_display_hook.py` registers on t
 Also tell them the two visible costs: in enabled projects, responses appear when they finish rather than streaming line by line, and the first response of a brand-new session is never hidden (fails open — the session's model cannot be read yet).
 
 If they want it, extend `register.py` from Step 5 with the same idempotent merge for a `MessageDisplay` entry running `challenger_display_hook.py` (absolute path, `"timeout": 10` — this hook runs per display flush and must stay fast). Everything else is shared: it reads the same `challenger.conf`, logs to the same `hook-debug.log`, and fails open on any error by showing the original text.
+
+### Step 6c — Optional: one message instead of two
+
+Only offer this if they took 6b. Setting `CHALLENGER_DISPLAY_EDIT=1` in `challenger.conf` moves the editor call into the display companion, which draws the finished report in place of the draft; the Stop hook then has nothing to do but allow. It saves a turn per report and removes the chance of the agent paraphrasing a report it was told to repost verbatim.
+
+It only works if the `MessageDisplay` entry's `"timeout"` is raised from `10` to `360`, matching the Stop entry — the platform default for that event is 10 seconds, less than an editor round, and at that value every draft stalls and then shows raw. Change both together or neither.
+
+Tell them the two costs. Every message over `CHALLENGER_MIN_CHARS` is edited, including long mid-turn ones, because nothing available while a message renders identifies the turn's last message. And the agent no longer reads the rewrite before it reaches them, so its standing permission to reject an editor that invented details does not apply; a mechanical check (citation markers, file paths, and backticked identifiers in the report must appear in the draft or the request) falls back to the 6b behaviour when it trips, but it cannot catch invented prose.
 
 ## Step 7 — Hand over
 
