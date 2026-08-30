@@ -13,11 +13,12 @@ swallowed, and on the final flush the whole message either appears at once
 (too short to be edited) or is handed to the editor.
 
 With CHALLENGER_DISPLAY_EDIT on, that editor call happens here and its report
-is drawn in place of the draft, so the user reads one message and no echo turn
-is needed; the Stop hook then only has to allow. Off (the default), the draft
-collapses to a one-line placeholder and the Stop hook's editor takes it from
-there. The cost in enabled projects either way is that messages appear at
-end-of-message rather than streaming line by line.
+is drawn in place of the draft, with the original stashed and linked beneath
+it, so the user reads one message and no echo turn is needed; the Stop hook
+then only has to allow. Off (the default), the draft collapses to a one-line
+placeholder and the Stop hook's editor takes it from there. The cost in
+enabled projects either way is that messages appear at end-of-message rather
+than streaming line by line.
 
 If the editor round then fails open, the Stop hook notices the hidden draft
 (via the shared display-state file) and has the agent repost it, so the
@@ -254,11 +255,16 @@ def main():
         if ch.DISPLAY_EDIT:
             report = edit_in_place(text, payload, session_id)
             if report is not None:
-                state["hidden_any"] = False  # nothing withheld: it is on screen
+                # The report is on screen, so the Stop hook has nothing to
+                # repost - but the draft it replaced left no placeholder to
+                # carry a link, so the original is stashed from here instead.
+                state["hidden_any"] = False
                 ch.save_display_state(session_id, state)
+                link = stash("Show the original draft", text, cwd,
+                             session_id, message_id)
                 ch.log(f"display: edited in place, {len(text)} -> {len(report)} "
                        f"chars (session {session_id})")
-                emit(report)
+                emit(report + link)
         state["hidden_any"] = True
         ch.save_display_state(session_id, state)
         ch.log(f"display: withheld draft, {len(text)} chars (session {session_id})")

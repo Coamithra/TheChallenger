@@ -65,7 +65,7 @@ If the editor round fails after a draft was hidden, the Stop hook notices and ha
 
 ### One message instead of two
 
-Set `CHALLENGER_DISPLAY_EDIT=1` and the companion runs the editor itself, drawing the finished report in place of the draft. There is no follow-up message: the Stop hook sees the report has already been delivered and simply allows. That saves a turn per report and removes the chance of the agent paraphrasing something it was told to post verbatim.
+Set `CHALLENGER_DISPLAY_EDIT=1` and the companion runs the editor itself, drawing the finished report in place of the draft, with a link to the original underneath it. There is no follow-up message: the Stop hook sees the report has already been delivered and simply allows. That saves a turn per report and removes the chance of the agent paraphrasing something it was told to post verbatim.
 
 It needs the `MessageDisplay` entry's `timeout` raised to `360`, matching the Stop entry. The platform default for that event is 10 seconds — measured in the 2.1.247 build, and a per-hook `timeout` does override it — which is less than the editor needs; leave it at 10 and every draft stalls and then shows raw.
 
