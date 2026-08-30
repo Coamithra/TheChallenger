@@ -2,7 +2,7 @@
 
 An automatic report editor for [Claude Code](https://claude.com/claude-code).
 
-Claude Opus 5 writes excellent code and dense, jargon-heavy reports about it. The Challenger sits at the end of every turn, hands the response to a second model, and gets back the report you should have received: what changed, why it matters, how it was verified, and what still needs your attention. In release-note register, not implementation narration.
+Claude Opus 5 writes excellent code and dense, jargon-heavy prose about it. The Challenger sits at the end of every turn, hands the response to a second model, and gets back a better-written version of the same response: the main point surfaced, dense sentences opened up, local jargon replaced. In the agent's own voice, with its caveats, verification, and open questions intact — it edits the writing, not the kind of thing being written.
 
 It is one Python file, one prompt file, and a `Stop` hook entry. No service, no daemon, no dependencies outside the standard library.
 
@@ -97,13 +97,13 @@ Platform caveats, current as of Claude Code 2.1.246: the message stream renders 
 
 ## House style
 
-The editor's entire personality is [critic-prompt.md](critic-prompt.md), in plain prose. It currently asks for high-level, outcome-oriented reports that preserve caveats, verification status, remaining manual actions, and useful references, while dropping implementation mechanics you did not ask for. If you want a different register — terser, more technical, a different language — change it there.
+The editor's entire personality is [critic-prompt.md](critic-prompt.md), in plain prose. It currently asks for clearer, tighter writing that preserves the author's voice, point of view, and level of formality along with caveats, verification status, remaining manual actions, and useful references. If you want something else — a house register imposed regardless of the original, terser output, a different language — change it there.
 
 That file is tracked, though, so editing it in place will conflict the next time you `git pull`. Copy it alongside as `critic-prompt.local.md` (gitignored) and set `CHALLENGER_PROMPT=critic-prompt.local.md` in your config; your house style then survives every update.
 
 ## Design decisions worth knowing
 
-**Subagents are excluded on purpose.** Background and farmed agents end their turns with `SubagentStop`, and the hook is registered only on `Stop`. A subagent's output is a handoff to an orchestrating agent, not a report for a human: rewriting it into release-note register would strip exactly the detail the orchestrator needs, and blocking would inject echo turns into agents nobody is reading. The orchestrating session's own response is edited, which is where you actually read.
+**Subagents are excluded on purpose.** Background and farmed agents end their turns with `SubagentStop`, and the hook is registered only on `Stop`. A subagent's output is a handoff to an orchestrating agent, not a report for a human: prose that reads well buys nothing there, and blocking would inject echo turns into agents nobody is reading. The orchestrating session's own response is edited, which is where you actually read.
 
 **It fails open, always.** Any error, timeout, missing CLI, auth failure, or unparseable editor output allows the stop and ships the original. A broken Challenger costs you the edit, never the session.
 

@@ -1,6 +1,6 @@
 # The Challenger
 
-An automatic report editor for Claude Code. A global `Stop` hook intercepts the end of an Opus 5 turn, sends the response to an editor model (OpenAI `gpt-5.6-sol` by default), and blocks the stop with an instruction to post the editor's rewrite verbatim. The result is that long Opus 5 reports reach the user as release-note-style summaries — what changed, why it matters, how it was verified, what still needs attention — instead of dense implementation narration.
+An automatic report editor for Claude Code. A global `Stop` hook intercepts the end of an Opus 5 turn, sends the response to an editor model (OpenAI `gpt-5.6-sol` by default), and blocks the stop with an instruction to post the editor's rewrite verbatim. The result is that long Opus 5 responses reach the user better written than they left — the main point surfaced, dense sentences opened up, local jargon replaced — in the agent's own voice, with its first-person ownership, caveats, hedges, and any question it was asking left intact. The editor improves the writing; it does not convert the response into a different kind of document.
 
 This is a public repo (`Coamithra/TheChallenger`, MIT). Anything you add here ships to strangers: no personal paths, no project names, no session excerpts in tracked files.
 
@@ -11,7 +11,7 @@ This is a public repo (`Coamithra/TheChallenger`, MIT). Anything you add here sh
 ```
 challenger_hook.py     the whole implementation - Stop hook entry point (command hook)
 challenger_display_hook.py  optional MessageDisplay companion - hides drafts as they render
-critic-prompt.md       the editor model's system prompt (the "Report Editor" instructions)
+critic-prompt.md       the editor model's instructions (the "Response Editor" prompt)
 smoke_test.py          fake Stop payload -> real editor call; the end-to-end check
 schema.json            the editor's decision shape - documentation only, not loaded at runtime
 critic-settings.json   {"disableAllHooks": true}, passed to the Claude backend so it can't recurse
@@ -60,7 +60,7 @@ State lives in `%TEMP%\challenger-<session_id>.json` and is cleared whenever a t
 
 ## Design notes
 
-**Subagents are excluded by design.** Background and farmed agents end their turns with `SubagentStop`, not `Stop`, and the hook is deliberately registered only on `Stop`. Their output is a machine-to-machine handoff to an orchestrating agent, not a report for a human — rewriting it into release-note register would strip exactly the detail the overseer needs, and blocking would inject echo turns into agents nobody is reading. The overseer session's own response is challenged, which is where the user actually reads.
+**Subagents are excluded by design.** Background and farmed agents end their turns with `SubagentStop`, not `Stop`, and the hook is deliberately registered only on `Stop`. Their output is a machine-to-machine handoff to an orchestrating agent, not a report for a human — prose that reads well buys nothing there, and blocking would inject echo turns into agents nobody is reading. The overseer session's own response is challenged, which is where the user actually reads.
 
 **Fail open, always.** Any exception, timeout, unparseable editor output, or missing dependency allows the stop. A broken Challenger must never brick a session; `main()` is wrapped in a bare `except` that exits 0. This is the one invariant to protect when changing anything here.
 

@@ -4,7 +4,7 @@
 
 ## For the agent: what you are installing
 
-The Challenger is a `Stop` hook that sends the user's long Opus 5 responses to a second model, which rewrites them into a high-level report. It is registered once, globally, and gates on a list of project roots the user chooses. Your job is to get it configured, registered, and smoke-tested — and to leave the user's existing setup intact.
+The Challenger is a `Stop` hook that sends the user's long Opus 5 responses to a second model, which rewrites them for clarity while keeping the agent's own voice. It is registered once, globally, and gates on a list of project roots the user chooses. Your job is to get it configured, registered, and smoke-tested — and to leave the user's existing setup intact.
 
 Rules for this install:
 
