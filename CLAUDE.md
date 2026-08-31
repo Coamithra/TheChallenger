@@ -50,7 +50,7 @@ Gates run in order, cheapest first, and every one of them fails open:
 Past the gates the response goes to the editor along with the user's last real prompt (extracted from the transcript, for register and altitude judgment). The editor returns one of two actions:
 
 - `echo_to_user` — the message is the finished report. The hook blocks with "post this verbatim", records phase `echo` in the state file, and allows the next stop unreviewed.
-- `ask_model` — the message is clarification questions. The hook blocks with them, stores the exchange, and re-invokes the editor with the agent's answers on the next stop. Bounded at `MAX_ASK_ROUNDS` (2); past that the original ships.
+- `ask_model` — the message is clarification questions. The hook blocks with them, stores the exchange, and re-invokes the editor with the agent's answers on the next stop. Bounded at `MAX_ASK_ROUNDS` (2); past that the original ships. When the round ends in a report, `deliver_exchange()` appends the questions and answers to the draft the display companion stashed and puts a link to that file under the report, saying how many questions were asked — otherwise the exchange that shaped the report is readable only in verbose mode.
 
 State lives in `%TEMP%\challenger-<session_id>.json` and is cleared whenever a turn resolves.
 

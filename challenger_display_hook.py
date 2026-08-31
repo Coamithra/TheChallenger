@@ -71,8 +71,8 @@ CODE_SPAN_RE = re.compile(r"`([^`\n]{3,80})`")
 PATH_RE = re.compile(r"(?:[\w.\-]*[\\/])?[\w\-]{2,}\.[A-Za-z]{2,4}\b")
 
 
-def stash(label, text, cwd, session_id, message_id):
-    """Park the hidden text in a file and return a link line pointing at it.
+def write_stash(text, cwd, session_id, message_id):
+    """Park the hidden text in a file; return its path and its link target.
 
     There is no foldout to hide it behind: the message stream renders no raw
     HTML and has no collapsible syntax, so an earlier <details> attempt simply
@@ -83,8 +83,9 @@ def stash(label, text, cwd, session_id, message_id):
     whole directory including itself: nothing appears in `git status` and the
     project's own ignore rules are never touched.
 
-    Returns "" if the file cannot be written - the placeholder then stands
-    alone, and the original is still in the transcript and in verbose mode.
+    Returns (None, None) if the file cannot be written - the placeholder then
+    stands alone, and the original is still in the transcript and in verbose
+    mode.
     """
     try:
         directory = os.path.join(cwd, DRAFT_DIR)
@@ -95,13 +96,19 @@ def stash(label, text, cwd, session_id, message_id):
                 f.write("*\n")
         safe = "".join(c for c in f"{session_id}-{message_id}" if c.isalnum() or c in "-_")
         name = f"{safe[:80] or 'draft'}.md"
-        with open(os.path.join(directory, name), "w", encoding="utf-8") as f:
+        path = os.path.join(directory, name)
+        with open(path, "w", encoding="utf-8") as f:
             f.write(text)
         _prune_drafts(directory)
-        return f"\n\n[{label}]({DRAFT_DIR.replace(os.sep, '/')}/{name})"
+        return path, f"{DRAFT_DIR.replace(os.sep, '/')}/{name}"
     except OSError as e:
         ch.log(f"display: could not stash the draft: {e!r}")
-        return ""
+        return None, None
+
+
+def stash(label, text, cwd, session_id, message_id):
+    """write_stash, for the callers that only need the link line."""
+    return ch.draft_link(label, write_stash(text, cwd, session_id, message_id)[1])
 
 
 def _prune_drafts(directory):
@@ -144,14 +151,15 @@ def check_fidelity(report, sources):
     return sorted(set(unsupported))[:5]
 
 
-def edit_in_place(text, payload, session_id):
+def edit_in_place(text, payload, session_id, draft_file=None, draft_target=None):
     """Run the editor now and return the report to draw, or None to fall back.
 
     Also sets up the Stop hook, which runs a moment later: `delivered` tells it
     the user has already read the report, `ask_pending` hands it the questions
-    the editor asked instead (they cannot be answered mid-render). Falling back
-    clears the state so a stale phase from an earlier message in the same turn
-    cannot make Stop allow a placeholder.
+    the editor asked instead (they cannot be answered mid-render), along with
+    where this draft was stashed so the Stop hook can fold the exchange into
+    that same file. Falling back clears the state so a stale phase from an
+    earlier message in the same turn cannot make Stop allow a placeholder.
     """
     tail = ch.read_transcript_tail(payload.get("transcript_path", ""))
     user_context = ch.last_user_text(tail)
@@ -165,6 +173,7 @@ def edit_in_place(text, payload, session_id):
         ch.save_state(session_id, {
             "phase": "ask_pending", "original": text,
             "user_context": user_context, "exchange": [{"q": result["message"]}],
+            "draft_file": draft_file, "draft_link": draft_target,
         })
         ch.log(f"display: editor asked for clarification, parked for the Stop "
                f"hook (session {session_id})")
@@ -252,23 +261,26 @@ def main():
         ch.log(f"display: collapsed ask-round answer, {len(text)} chars (session {session_id})")
         emit(ASK_PLACEHOLDER + stash("Show the answers", text, cwd, session_id, message_id))
     if len(text) >= ch.MIN_CHARS:
+        # Stashed before the editor runs: both paths below link the original,
+        # and the Stop hook needs the file to fold a clarification round into.
+        draft_file, draft_target = write_stash(text, cwd, session_id, message_id)
+        state["draft_file"], state["draft_link"] = draft_file, draft_target
         if ch.DISPLAY_EDIT:
-            report = edit_in_place(text, payload, session_id)
+            report = edit_in_place(text, payload, session_id,
+                                   draft_file, draft_target)
             if report is not None:
                 # The report is on screen, so the Stop hook has nothing to
                 # repost - but the draft it replaced left no placeholder to
-                # carry a link, so the original is stashed from here instead.
+                # carry a link, so the original is linked from here instead.
                 state["hidden_any"] = False
                 ch.save_display_state(session_id, state)
-                link = stash("Show the original draft", text, cwd,
-                             session_id, message_id)
                 ch.log(f"display: edited in place, {len(text)} -> {len(report)} "
                        f"chars (session {session_id})")
-                emit(report + link)
+                emit(report + ch.draft_link("Show the original draft", draft_target))
         state["hidden_any"] = True
         ch.save_display_state(session_id, state)
         ch.log(f"display: withheld draft, {len(text)} chars (session {session_id})")
-        emit(PLACEHOLDER + stash("Show the original draft", text, cwd, session_id, message_id))
+        emit(PLACEHOLDER + ch.draft_link("Show the original draft", draft_target))
     ch.save_display_state(session_id, state)
     emit(text)  # too short to be edited: release it, just all at once
 

@@ -111,7 +111,9 @@ CHALLENGER_TAG = "[The Challenger]"
 ECHO_INSTRUCTION = (
     f"{CHALLENGER_TAG} A report editor has rewritten your report for the user. "
     "Post the edited report below verbatim as your next message - the full text, "
-    "no additions, no commentary, no mention of the editing process. "
+    "no additions, no commentary, no mention of the editing process. A trailing "
+    "link line, where the text below carries one, is part of the report: post "
+    "that too. "
     "One exception: if the rewrite gets facts wrong - invented details, dropped "
     "caveats, broken citations - post your original report verbatim instead, "
     "also without commentary. Style is the editor's call and is not grounds "
@@ -127,6 +129,11 @@ REPOST_INSTRUCTION = (
     "Post your report again verbatim as your next message - the full text, "
     "no additions, no commentary:\n\n"
 )
+
+
+def draft_link(label, target):
+    """The line that links a draft the display companion stashed away."""
+    return f"\n\n[{label}]({target})" if target else ""
 
 
 def log(message):
@@ -405,13 +412,53 @@ def fail_open(session_id, original=None, note=None) -> NoReturn:
     allow(note)
 
 
+def count_questions(exchange):
+    """How many questions the editor asked, across every round.
+
+    It asks in prose rather than on a form, so the question marks are the
+    count; a round that asks for something without one still counts as one.
+    """
+    return sum(qa.get("q", "").count("?") or 1 for qa in exchange)
+
+
+def deliver_exchange(state):
+    """Fold the clarification round into the stashed draft; return its link.
+
+    The display companion hides the draft behind a placeholder and the agent's
+    answers behind another, so without this the questions that shaped the
+    report are only readable in verbose mode. Returns the line to put under the
+    report - the link plus how many questions were asked - or "" when there was
+    no exchange, no stashed draft, or the append failed, leaving the report to
+    stand alone as it did before.
+    """
+    exchange = [qa for qa in state.get("exchange", []) if qa.get("q")]
+    link = draft_link("Show the original draft", state.get("draft_link"))
+    if not exchange or not link or not state.get("draft_file"):
+        return ""
+    section = ["\n\n---\n\n## The report editor's clarification round\n"]
+    for i, qa in enumerate(exchange, 1):
+        section.append(f"\n### The editor asked (round {i})\n\n{qa['q'].strip()}\n")
+        if qa.get("a"):
+            section.append(f"\n### The agent answered (round {i})\n\n{qa['a'].strip()}\n")
+    try:
+        with open(state["draft_file"], "a", encoding="utf-8") as f:
+            f.write("".join(section))
+    except OSError as e:
+        log(f"could not append the clarification round to the draft: {e!r}")
+        return ""
+    asked = count_questions(exchange)
+    return link + (f" - and the {asked} clarification question"
+                   f"{'s' if asked != 1 else ''} the editor asked about it.")
+
+
 def dispatch(session_id, result, state):
     """Act on an editor decision. `state` carries original/user_context/exchange."""
     if result["action"] == "echo_to_user":
+        report = result["message"] + deliver_exchange(state)
         save_state(session_id, {"phase": "echo"})
         log(f"echo: delivering edited report (session {session_id})")
         block(
-            ECHO_INSTRUCTION + result["message"],
+            ECHO_INSTRUCTION + report,
             f"The Challenger: report edited by {CRITIC_NAME}; delivering.",
         )
     asks = len(state.get("exchange", [])) + 1
@@ -511,7 +558,12 @@ def main():
 
     # Fresh response (or revising with no/foreign state): edit it.
     clear_state(session_id)
-    state = {"original": message, "user_context": last_user_text(tail)}
+    display = load_display_state(session_id)
+    state = {"original": message, "user_context": last_user_text(tail),
+             # Where the companion stashed this draft, if it did: a
+             # clarification round is folded back into that same file.
+             "draft_file": display.get("draft_file"),
+             "draft_link": display.get("draft_link")}
     result = run_editor(message, state["user_context"])
     if result is None:
         fail_open(session_id, message)
