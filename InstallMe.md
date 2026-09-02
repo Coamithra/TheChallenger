@@ -27,6 +27,8 @@ python --version
 
 Python 3.8+ with no third-party packages. If `python` is not the right interpreter on this machine (some systems need `python3`, and on Windows `python3` may hit the Microsoft Store alias), find the one that works and use it consistently for the rest of this runbook.
 
+If Step 1 will be cloning, check `git --version` too. If git is missing, install it or tell the user how — do not work around it by downloading a zip of the repo, which would leave them with no `git pull` to update with later.
+
 Check that Claude Code's settings file exists — `~/.claude/settings.json` on every platform (`C:\Users\<you>\.claude\settings.json` on Windows). If it does not exist yet, you will create it in Step 5.
 
 Note the platform's path separator: `;` on Windows, `:` on macOS and Linux. Step 4 needs it.
