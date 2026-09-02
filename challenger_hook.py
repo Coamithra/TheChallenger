@@ -5,10 +5,12 @@ and non-Opus-5 sessions are waved through programmatically. Anything else goes
 to a report editor (OpenAI gpt-5.6-sol via the codex CLI bridge by default,
 Claude via CHALLENGER_CRITIC=claude) that rewrites the response into the
 high-level report the user prefers. The editor may first ask the coding agent
-clarification questions (bounded rounds). Its final report is delivered by
-having the agent post it verbatim, or - with CHALLENGER_DISPLAY_EDIT on -
-drawn by the display companion in place of the draft, leaving this hook
-nothing to do but allow. Fails open: any error allows the stop.
+clarification questions (bounded rounds). Its final report is drawn by the
+display companion in place of the draft, leaving this hook nothing to do but
+allow. Where that cannot happen - no companion registered, a client that
+ignores displayContent, or a rewrite the companion handed back for review -
+this hook runs the editor itself and blocks for the agent to post the report
+verbatim. Fails open: any error allows the stop.
 """
 
 import json
@@ -99,12 +101,6 @@ CODEX_MODEL = _env("CHALLENGER_CODEX_MODEL", "gpt-5.6-sol")
 CODEX_EFFORT = _env("CHALLENGER_CODEX_EFFORT", "high")  # try lowering once happy
 CRITIC_NAME = CODEX_MODEL if CRITIC_BACKEND == "codex" else CRITIC_MODEL
 CRITIC_TIMEOUT = _env_int("CHALLENGER_TIMEOUT", 300)  # seconds; keep below the hook's own timeout
-# Let the display companion run the editor and draw the finished report in
-# place of the draft, instead of blocking for the agent to repost it. Off by
-# default: it only works if the MessageDisplay hook entry raises its timeout
-# past the editor's, and at the platform default of 10s every draft would
-# stall and then fail open to the raw text. See README.md.
-DISPLAY_EDIT = _env("CHALLENGER_DISPLAY_EDIT", "0").strip().lower() not in ("0", "false", "no", "")
 MAX_RESPONSE_CHARS = 100_000  # truncate pathological inputs to the editor
 
 CHALLENGER_TAG = "[The Challenger]"

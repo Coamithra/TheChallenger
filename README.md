@@ -15,21 +15,25 @@ You ask for something
    Claude Opus 5  ── does the work, writes its report ──► rendered on screen
         │
         ▼
-   Stop hook fires
+   the display companion holds the draft back as it renders
         │
-        ├─ project not enabled?  ─► allow (~70ms)
-        ├─ response under 1750 chars? ─► allow
-        ├─ session model isn't Opus 5? ─► allow
+        ├─ project not enabled?  ─► show it (~70ms)
+        ├─ response under 1750 chars? ─► show it
+        ├─ session model isn't Opus 5? ─► show it
         ▼
-   editor model reads the report + your original request
+   editor model reads the draft + your original request
         │
-        ├─ needs context? ─► asks the coding agent targeted questions,
-        │                    reads the answers, then decides again (max 2 rounds)
+        ├─ needs context? ─► parks its questions for the Stop hook, which
+        │                    asks the agent and re-runs (max 2 rounds)
         ▼
-   returns the finished report ─► the agent posts it as its next message
+   the finished report is drawn in place of the draft,
+   with a link to the original underneath it
+        │
+        ▼
+   Stop hook fires ─► nothing left to deliver, allows
 ```
 
-Hooks cannot replace a response that has already been rendered, so by default the edited report arrives as a follow-up message rather than in place of the original. That is a platform constraint and the main thing to know before installing. The optional display companion below can hide the draft as it renders, and can go one further and draw the finished report in its place, so you read exactly one message.
+That is the path with both hooks registered, and it is the one to install. A hook cannot replace a response that has already been rendered, so the Stop hook on its own can only deliver its report as a follow-up message — the same text, a message later. Holding the draft back while it renders is what buys you a single message instead of two, and it is the main thing to understand before installing.
 
 ## Install
 
@@ -57,23 +61,21 @@ Settings live in `challenger.conf` next to the hook, copied from [challenger.con
 
 Set `CHALLENGER_CRITIC=claude` to switch.
 
-## Hiding the draft (optional)
+## The display companion
 
-`challenger_display_hook.py` is a second, optional hook on the `MessageDisplay` event (Claude Code 2.1.152+). It runs the same cheap gates as the Stop hook while a response is still rendering, buffers messages that might be edited, and on the message's last flush either shows the whole thing at once (too short to edit) or replaces it with a one-line placeholder and a link — the draft is written to `.claude/challenger-drafts/` in the project and linked from the placeholder, so the edited report is the only version on screen and the original is one click away. That directory gets a `.gitignore` containing `*`, which ignores the whole directory including itself, so it never shows up in `git status` and your own ignore rules are left alone; stashed drafts are swept after three days. This is display-only: the transcript and the model's context keep the original too, and verbose mode still shows it.
+`challenger_display_hook.py` is a second hook, on the `MessageDisplay` event (Claude Code 2.1.152+), registered separately from the Stop hook. It is where the editing happens. It runs the same cheap gates as the Stop hook while a response is still rendering, buffers messages that might be edited, and on the message's last flush either shows the whole thing at once (too short to edit) or hands it to the editor and draws the finished report in its place, with a link to the original underneath it.
 
-If the editor round fails after a draft was hidden, the Stop hook notices and has the agent repost the draft verbatim, so you never end up with just the placeholder.
+That original is written to `.claude/challenger-drafts/` in the project. It is stashed before the editor runs, because replacing a draft outright leaves no placeholder to carry a link and you should always be one click from what the agent actually wrote. The directory gets a `.gitignore` containing `*`, which ignores the whole directory including itself, so it never shows up in `git status` and your own ignore rules are left alone; stashed drafts are swept after three days. This is display-only: the transcript and the model's context keep the original too, and verbose mode still shows it.
 
-### One message instead of two
+When the editor cannot deliver — it asked for clarification, it was unavailable, or its rewrite failed the fidelity check below — the draft collapses to a one-line placeholder carrying the same link, and the Stop hook takes it from there: it re-runs the editor and has the agent post the report, or reposts the hidden draft verbatim if the editor is still down. You never end up with just the placeholder.
 
-Set `CHALLENGER_DISPLAY_EDIT=1` and the companion runs the editor itself, drawing the finished report in place of the draft, with a link to the original underneath it. There is no follow-up message: the Stop hook sees the report has already been delivered and simply allows. That saves a turn per report and removes the chance of the agent paraphrasing something it was told to post verbatim.
+It needs the `MessageDisplay` entry's `timeout` set to `360`, matching the Stop entry. The platform default for that event is 10 seconds — measured in the 2.1.247 build, and a per-hook `timeout` does override it — which is less than the editor needs; leave it at 10 and every draft stalls and then shows raw.
 
-It needs the `MessageDisplay` entry's `timeout` raised to `360`, matching the Stop entry. The platform default for that event is 10 seconds — measured in the 2.1.247 build, and a per-hook `timeout` does override it — which is less than the editor needs; leave it at 10 and every draft stalls and then shows raw.
-
-Two consequences worth knowing. Nothing available while a message renders can tell the turn's final report from a long mid-turn message: the payload's `final` flag marks the last flush of *that message*, the transcript does not yet contain the message being displayed, and the Stop hook runs strictly after display — a display hook that waits for it deadlocks until it times out. So every message over `CHALLENGER_MIN_CHARS` is edited, mid-turn ones included, and the editor is told the text may be a progress note rather than a report. And the agent never reads the rewrite, so its standing permission to reject one that invented details no longer applies; in its place the companion checks mechanically that every citation marker, file path, and backticked identifier in the report also appears in the draft or your request, and falls back to the placeholder-and-echo path when one does not. That check cannot catch invented prose.
+Two consequences of editing while the message renders. Nothing available while a message renders can tell the turn's final report from a long mid-turn message: the payload's `final` flag marks the last flush of *that message*, the transcript does not yet contain the message being displayed, and the Stop hook runs strictly after display — a display hook that waits for it deadlocks until it times out. So every message over `CHALLENGER_MIN_CHARS` is edited, mid-turn ones included, and the editor is told the text may be a progress note rather than a report. And the agent never reads the rewrite, so its standing permission to reject one that invented details no longer applies; in its place the companion checks mechanically that every citation marker, file path, and backticked identifier in the report also appears in the draft or your request, and falls back to the placeholder-and-echo path when one does not. That check cannot catch invented prose.
 
 Clarification rounds keep the old shape: questions cannot be answered while a message is rendering, so the companion parks them for the Stop hook, which asks the agent without paying for a second editor call. Both halves of such a round are hidden from you - the draft behind its placeholder, the agent's answers behind another - so when one happens the questions and answers are appended to the stashed draft file, and the delivered report ends with a link to it saying how many questions were asked.
 
-To enable it, register a second hook entry alongside the Stop one (same merge rules, same absolute-path convention):
+Register it alongside the Stop entry (same merge rules, same absolute-path convention):
 
 ```json
 {
@@ -84,7 +86,7 @@ To enable it, register a second hook entry alongside the Stop one (same merge ru
           {
             "type": "command",
             "command": "python \"/absolute/path/to/challenger_display_hook.py\"",
-            "timeout": 10
+            "timeout": 360
           }
         ]
       }
@@ -107,9 +109,9 @@ That file is tracked, though, so editing it in place will conflict the next time
 
 **It fails open, always.** Any error, timeout, missing CLI, auth failure, or unparseable editor output allows the stop and ships the original. A broken Challenger costs you the edit, never the session.
 
-**It costs a turn.** Every edited response is one editor call (roughly 5-15 seconds) plus one extra turn in which the agent posts the rewrite. There is no "this one was already fine" pass-through action; the editor always rewrites. If that feels wasteful, raise `CHALLENGER_MIN_CHARS`.
+**It costs an editor call.** Every response over the length gate is one call, roughly 5-15 seconds, added to the end of the turn. There is no "this one was already fine" pass-through action; the editor always rewrites. If that feels wasteful, raise `CHALLENGER_MIN_CHARS`. Falling back to the Stop hook costs a second call and an extra turn on top, which is the other reason to keep the companion registered.
 
-**Echo fidelity is unverified.** The stop that delivers the rewrite is allowed without review, so an agent that appends its own commentary to the "verbatim" report is not caught. The instruction does sanction one deviation: an agent that catches the editor getting facts wrong is told to post its original report verbatim instead — a fact-check of last resort, not a style veto.
+**Echo fidelity is unverified.** When the fallback fires, the stop that delivers the rewrite is allowed without review, so an agent that appends its own commentary to the "verbatim" report is not caught. The instruction does sanction one deviation: an agent that catches the editor getting facts wrong is told to post its original report verbatim instead — a fact-check of last resort, not a style veto.
 
 **Transcript parsing is best-effort.** Detecting the session model and your original request means reading Claude Code's session JSONL, whose format is internal and may change between versions. Both reads fail soft: the model gate skips editing, and the editor simply loses your request as context.
 

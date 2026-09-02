@@ -12,13 +12,14 @@ same cheap gates as the Stop hook (project, model, phase) every delta is
 swallowed, and on the final flush the whole message either appears at once
 (too short to be edited) or is handed to the editor.
 
-With CHALLENGER_DISPLAY_EDIT on, that editor call happens here and its report
-is drawn in place of the draft, with the original stashed and linked beneath
-it, so the user reads one message and no echo turn is needed; the Stop hook
-then only has to allow. Off (the default), the draft collapses to a one-line
-placeholder and the Stop hook's editor takes it from there. The cost in
-enabled projects either way is that messages appear at end-of-message rather
-than streaming line by line.
+That editor call happens here and its report is drawn in place of the draft,
+with the original stashed and linked beneath it, so the user reads one message
+and no echo turn is needed; the Stop hook then only has to allow. When the
+editor cannot deliver - it asked for clarification, it was unavailable, or its
+rewrite failed the fidelity check - the draft collapses to a one-line
+placeholder instead and the Stop hook takes it from there. The cost in enabled
+projects either way is that messages appear at end-of-message rather than
+streaming line by line.
 
 If the editor round then fails open, the Stop hook notices the hidden draft
 (via the shared display-state file) and has the agent repost it, so the
@@ -265,18 +266,17 @@ def main():
         # and the Stop hook needs the file to fold a clarification round into.
         draft_file, draft_target = write_stash(text, cwd, session_id, message_id)
         state["draft_file"], state["draft_link"] = draft_file, draft_target
-        if ch.DISPLAY_EDIT:
-            report = edit_in_place(text, payload, session_id,
-                                   draft_file, draft_target)
-            if report is not None:
-                # The report is on screen, so the Stop hook has nothing to
-                # repost - but the draft it replaced left no placeholder to
-                # carry a link, so the original is linked from here instead.
-                state["hidden_any"] = False
-                ch.save_display_state(session_id, state)
-                ch.log(f"display: edited in place, {len(text)} -> {len(report)} "
-                       f"chars (session {session_id})")
-                emit(report + ch.draft_link("Show the original draft", draft_target))
+        report = edit_in_place(text, payload, session_id,
+                               draft_file, draft_target)
+        if report is not None:
+            # The report is on screen, so the Stop hook has nothing to repost -
+            # but the draft it replaced left no placeholder to carry a link, so
+            # the original is linked from here instead.
+            state["hidden_any"] = False
+            ch.save_display_state(session_id, state)
+            ch.log(f"display: edited in place, {len(text)} -> {len(report)} "
+                   f"chars (session {session_id})")
+            emit(report + ch.draft_link("Show the original draft", draft_target))
         state["hidden_any"] = True
         ch.save_display_state(session_id, state)
         ch.log(f"display: withheld draft, {len(text)} chars (session {session_id})")

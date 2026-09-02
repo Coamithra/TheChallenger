@@ -4,7 +4,7 @@
 
 ## For the agent: what you are installing
 
-The Challenger is a `Stop` hook that sends the user's long Opus 5 responses to a second model, which rewrites them for clarity while keeping the agent's own voice. It is registered once, globally, and gates on a list of project roots the user chooses. Steps 0-7 install that hook and nothing else; there is a second, optional hook on the `MessageDisplay` event (Step 6b) that hides the draft as it renders, and you offer it only once the first one works. Your job is to get it configured, registered, and smoke-tested — and to leave the user's existing setup intact.
+The Challenger is a `Stop` hook that sends the user's long Opus 5 responses to a second model, which rewrites them for clarity while keeping the agent's own voice. It is registered once, globally, and gates on a list of project roots the user chooses. There is a second hook too, on the `MessageDisplay` event: it holds the draft back while it renders and draws the edited report in its place, which is what makes the user read one message instead of two. Steps 0-6 install the `Stop` hook alone and Step 6b adds the companion, in that order, so a working install exists before anything depends on display behaviour the user's client may not support. Your job is to get it configured, registered, and smoke-tested — and to leave the user's existing setup intact.
 
 Rules for this install:
 
@@ -71,7 +71,7 @@ Tell the user which backend you are configuring and why. The default exists beca
 Give them what they need to answer well:
 
 - The hook is registered globally but only acts on sessions whose working directory is inside one of the roots they name. Everything else is untouched, at a cost of about 70ms per response.
-- Inside an enabled project, **every** Opus 5 response over 1750 characters costs one editor call (5-15 seconds) and one extra turn while the agent posts the rewrite. That is the real price, and it is per response, not per session. (Step 6c can drop the extra turn later by drawing the report in place of the draft — do not offer it here; the editor call remains either way.)
+- Inside an enabled project, **every** Opus 5 response over 1750 characters costs one editor call (5-15 seconds) and one extra turn while the agent posts the rewrite. That is the real price, and it is per response, not per session. (Step 6b's companion removes the extra turn on clients that support it — do not offer it here; the editor call remains either way.)
 - Git worktrees under a listed root are covered automatically — they do not need separate entries.
 - This is trivially reversible: enabling or disabling a project later is one line in `challenger.conf`.
 
@@ -144,28 +144,27 @@ If it reports that the hook allowed the stop, `hook-debug.log` in the repo direc
 
 Every one of these fails open by design: the hook never blocks a session, it just stops editing.
 
-## Step 6b — Optional: hide the drafts (display companion)
+## Step 6b — Register the display companion (recommended)
 
-Offer this to the user, default off. `challenger_display_hook.py` registers on the `MessageDisplay` event and hides would-be-edited drafts as they render, so the edited report is the only version they read. Before offering, check both prerequisites:
+`challenger_display_hook.py` registers on the `MessageDisplay` event. It holds back a draft that is about to be edited, runs the editor while the message is still rendering, and draws the finished report in place of the draft with a link to the original underneath — so the user reads one message rather than the draft followed by its rewrite, and the agent never gets the chance to paraphrase a report it was told to post verbatim. Where it cannot deliver, the draft collapses to a one-line placeholder and the Stop hook you just installed takes over, so this is additive: nothing from Steps 0-6 stops working.
+
+Check both prerequisites before offering it:
 
 - Claude Code 2.1.152 or newer (`claude --version`).
-- Tell the user the honest platform status: print mode honors it fully; the desktop app applies it but may briefly flash the draft first; **the interactive terminal currently ignores it entirely** (anthropics/claude-code#83957) — a terminal-only user gains nothing today.
+- Tell the user the honest platform status: print mode honors it fully; the desktop app applies it but may briefly flash the draft first; **the interactive terminal currently ignores it entirely** (anthropics/claude-code#83957) — a terminal-only user gains nothing today and should skip this step.
 
-The hidden draft is not thrown away: it is written to `.claude/challenger-drafts/` inside the enabled project and linked from the one-line placeholder, so the original is one click away. Mention that directory — it is the only thing this install leaves inside their own projects. It ignores itself with a `.gitignore` containing `*`, so nothing reaches `git status` and their own ignore rules are untouched, and stashed drafts are swept after three days.
+The draft is not thrown away: it is written to `.claude/challenger-drafts/` inside the enabled project and linked under the report. Mention that directory — it is the only thing this install leaves inside their own projects. It ignores itself with a `.gitignore` containing `*`, so nothing reaches `git status` and their own ignore rules are untouched, and stashed drafts are swept after three days.
 
-Also tell them the two visible costs: in enabled projects, responses appear when they finish rather than streaming line by line, and the first response of a brand-new session is never hidden (fails open — the session's model cannot be read yet).
+If they want it, extend `register.py` from Step 5 with the same idempotent merge for a `MessageDisplay` entry running `challenger_display_hook.py`, by absolute path and with `"timeout": 360` to match the Stop entry. That timeout is not optional: the platform default for this event is 10 seconds, less than an editor round, and at that value every draft stalls and then shows raw. Everything else is shared — it reads the same `challenger.conf`, logs to the same `hook-debug.log`, and fails open on any error by showing the original text.
 
-If they want it, extend `register.py` from Step 5 with the same idempotent merge for a `MessageDisplay` entry running `challenger_display_hook.py` (absolute path, `"timeout": 10` — this hook runs per display flush and must stay fast). Everything else is shared: it reads the same `challenger.conf`, logs to the same `hook-debug.log`, and fails open on any error by showing the original text.
+Tell them the four costs:
 
-### Step 6c — Optional: one message instead of two
+- In enabled projects, responses appear when they finish rather than streaming line by line.
+- The first response of a brand-new session is never hidden (fails open — the session's model cannot be read yet).
+- Every message over `CHALLENGER_MIN_CHARS` is edited, long mid-turn ones included, because nothing available while a message renders identifies the turn's final report. The editor is told the text may be a progress note rather than a report.
+- The agent no longer reads the rewrite before it reaches them, so its standing permission to reject an editor that invented details does not apply. In its place a mechanical check — citation markers, file paths, and backticked identifiers in the report must appear in the draft or the user's request — hands the rewrite back to the Stop hook when it trips, where the agent does see it. That check cannot catch invented prose.
 
-Only offer this if they took 6b. Setting `CHALLENGER_DISPLAY_EDIT=1` in `challenger.conf` moves the editor call into the display companion, which draws the finished report in place of the draft, with a link to the stashed original underneath it — replacing the draft outright leaves no placeholder to carry that link. The Stop hook then has nothing to do but allow. It saves a turn per report and removes the chance of the agent paraphrasing a report it was told to repost verbatim.
-
-It only works if the `MessageDisplay` entry's `"timeout"` is raised from `10` to `360`, matching the Stop entry — the platform default for that event is 10 seconds, less than an editor round, and at that value every draft stalls and then shows raw. Change both together or neither.
-
-Clarification rounds keep the shape they have in 6b: questions cannot be answered while a message is still rendering, so the companion parks them for the Stop hook, which asks the agent without paying for a second editor call. Both halves of such a round are hidden from the user, so the questions and the agent's answers are appended to the stashed draft file, and the report's link line says how many questions were asked.
-
-Tell them the two costs. Every message over `CHALLENGER_MIN_CHARS` is edited, including long mid-turn ones, because nothing available while a message renders identifies the turn's last message. And the agent no longer reads the rewrite before it reaches them, so its standing permission to reject an editor that invented details does not apply; a mechanical check (citation markers, file paths, and backticked identifiers in the report must appear in the draft or the request) falls back to the 6b behaviour when it trips, but it cannot catch invented prose.
+Clarification rounds still resolve at the Stop hook: questions cannot be answered while a message is rendering, so the companion parks them and the Stop hook asks the agent without paying for a second editor call. Both halves of such a round are hidden from the user, so the questions and the agent's answers are appended to the stashed draft file, and the report's link line says how many questions were asked.
 
 ## Step 7 — Hand over
 
@@ -173,7 +172,7 @@ Tell the user:
 
 - which projects are enabled, and which backend is running;
 - that the hook applies to **new** sessions — sessions already open when you registered it will not pick it up;
-- that the edited report arrives as a **follow-up message**, because hooks cannot replace a response that has already been rendered. The first time it fires it looks like the agent repeated itself in plainer language. That is the feature working. (Skip this one if they took Step 6c — there the report is drawn in place of the draft and there is no second message.)
+- what a delivered report looks like: with the companion from Step 6b, it is drawn in place of the draft with a link to the original underneath. Without it — or in the interactive terminal, which drops `displayContent` — the report arrives as a **follow-up message** instead, because a hook cannot replace a response that has already been rendered. The first time that fires it looks like the agent repeated itself in plainer language. That is the feature working.
 - how to change their mind: edit `CHALLENGER_PROJECTS` in `challenger.conf` to add or drop a project, and delete the `Stop` entry — plus the `MessageDisplay` entry, if you registered one — from `~/.claude/settings.json` to remove it entirely;
 - that updating is `git pull` in the repo directory — the clone *is* the installation, since the hook is registered by absolute path and nothing was copied elsewhere;
 - that to change the register of the reports they should copy `critic-prompt.md` to `critic-prompt.local.md` and set `CHALLENGER_PROMPT=critic-prompt.local.md` in their config, rather than editing the tracked file, which would conflict on their next update.

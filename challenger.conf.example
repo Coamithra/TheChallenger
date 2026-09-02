@@ -43,24 +43,6 @@ CHALLENGER_PROJECTS=C:\code\my-project;C:\code\another-project
 # CHALLENGER_PROMPT=critic-prompt.local.md
 
 
-# --- One report instead of two (needs the display companion) -----------------
-#
-# With the MessageDisplay companion registered, this moves the editor call into
-# it: the finished report is drawn in place of the draft, with no follow-up
-# message, which saves a turn and removes the risk of the agent paraphrasing a
-# report it was told to repost verbatim.
-#
-# Two things to know before turning it on. The MessageDisplay hook entry in
-# ~/.claude/settings.json must raise its timeout to match the Stop entry (360),
-# because the platform default for that event is 10 seconds and the editor needs
-# longer; at 10s every draft stalls and then shows raw. And nothing at display
-# time can tell the turn's final report from a long mid-turn message, so every
-# message over CHALLENGER_MIN_CHARS is edited, including ones the agent writes
-# before carrying on working.
-
-# CHALLENGER_DISPLAY_EDIT=1
-
-
 # --- Tuning ------------------------------------------------------------------
 #
 # The defaults below are the tested ones; change them only if something about
