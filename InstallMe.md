@@ -4,7 +4,7 @@
 
 ## For the agent: what you are installing
 
-The Challenger is a `Stop` hook that sends the user's long Opus 5 responses to a second model, which rewrites them for clarity while keeping the agent's own voice. It is registered once, globally, and gates on a list of project roots the user chooses. Your job is to get it configured, registered, and smoke-tested — and to leave the user's existing setup intact.
+The Challenger is a `Stop` hook that sends the user's long Opus 5 responses to a second model, which rewrites them for clarity while keeping the agent's own voice. It is registered once, globally, and gates on a list of project roots the user chooses. Steps 0-7 install that hook and nothing else; there is a second, optional hook on the `MessageDisplay` event (Step 6b) that hides the draft as it renders, and you offer it only once the first one works. Your job is to get it configured, registered, and smoke-tested — and to leave the user's existing setup intact.
 
 Rules for this install:
 
@@ -71,7 +71,7 @@ Tell the user which backend you are configuring and why. The default exists beca
 Give them what they need to answer well:
 
 - The hook is registered globally but only acts on sessions whose working directory is inside one of the roots they name. Everything else is untouched, at a cost of about 70ms per response.
-- Inside an enabled project, **every** Opus 5 response over 1750 characters costs one editor call (5-15 seconds) and one extra turn while the agent posts the rewrite. That is the real price, and it is per response, not per session.
+- Inside an enabled project, **every** Opus 5 response over 1750 characters costs one editor call (5-15 seconds) and one extra turn while the agent posts the rewrite. That is the real price, and it is per response, not per session. (Step 6c can drop the extra turn later by drawing the report in place of the draft — do not offer it here; the editor call remains either way.)
 - Git worktrees under a listed root are covered automatically — they do not need separate entries.
 - This is trivially reversible: enabling or disabling a project later is one line in `challenger.conf`.
 
