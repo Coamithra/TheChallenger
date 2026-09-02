@@ -33,7 +33,13 @@ Note the platform's path separator: `;` on Windows, `:` on macOS and Linux. Step
 
 ## Step 1 — Place the repo
 
-The hook reads its prompt, settings, and vendored bridge relative to its own location, so the repo can live anywhere — but it must live somewhere permanent, because the hook is registered by absolute path. If the user cloned it into a temporary or throwaway directory, say so and agree on a home for it before continuing.
+If you were pointed at this file by URL and the repo is not on this machine yet, clone it first. Every later step runs commands inside the repo directory, not against the page you are reading:
+
+```bash
+git clone https://github.com/Coamithra/TheChallenger.git
+```
+
+The hook reads its prompt, settings, and vendored bridge relative to its own location, so the repo can live anywhere — but it must live somewhere permanent, because the hook is registered by absolute path. Ask the user where it should live rather than leaving it wherever this session happens to be running, and if it was already cloned into a temporary or throwaway directory, say so and agree on a home for it before continuing.
 
 Record the absolute path to `challenger_hook.py`; Steps 4-6 all need it.
 
