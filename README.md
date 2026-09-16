@@ -57,6 +57,8 @@ Settings live in `challenger.conf` next to the hook, copied from [challenger.con
 
 **codex** (default) runs OpenAI's `gpt-5.6-sol` through the vendored `vendor/ask_codex.py` bridge. Requires the [Codex CLI](https://github.com/openai/codex) on PATH and a valid `codex login`. The default is deliberately cross-vendor: an editor from the same family as the model it edits shares its stylistic blind spots, and in testing the Claude editor was slower for no gain in catch rate.
 
+**Running out of Codex credits costs one call, not one per turn.** Codex sells credits by the period and refuses once they are gone, naming the time they come back ("try again at Sep 19th, 2026 4:21 PM"); nothing in the CLI reports the balance without spending a request, so there is no cheap pre-flight check to make. The first refusal is the check instead: the hook reads the reset time out of it and records a cooldown in `%TEMP%\challenger-codex-cooldown.json` (`/tmp` elsewhere), and every stop until then skips the editor without spawning Codex at all — logged as `codex editor skipped: out of credits until ...`. When the message names no reset time the cooldown runs to the next local midnight. Delete the file to retry sooner; editing stays off only as long as the block lasts, and the `claude` backend is unaffected.
+
 **claude** runs `claude -p` headlessly with `claude-fable-5`. No extra install if you already have Claude Code. It is passed `critic-settings.json` (`{"disableAllHooks": true}`) so the editor cannot re-trigger this same hook.
 
 Set `CHALLENGER_CRITIC=claude` to switch.

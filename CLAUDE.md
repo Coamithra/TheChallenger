@@ -56,7 +56,7 @@ State lives in `%TEMP%\challenger-<session_id>.json` and is cleared whenever a t
 
 ## Editor backends
 
-`CHALLENGER_CRITIC=codex` (default) runs `vendor/ask_codex.py` with the interpreter already running the hook. The vendor split is deliberate: a Claude editor shares Claude's stylistic blind spots, and the codex path also runs 2-4x faster. It depends on a valid `codex login`; auth failure fails open. `CHALLENGER_CRITIC=claude` switches to `claude -p` with `CHALLENGER_CRITIC_MODEL` (default `claude-fable-5`), which must be passed `critic-settings.json` or the headless editor re-triggers this same hook.
+`CHALLENGER_CRITIC=codex` (default) runs `vendor/ask_codex.py` with the interpreter already running the hook. The vendor split is deliberate: a Claude editor shares Claude's stylistic blind spots, and the codex path also runs 2-4x faster. It depends on a valid `codex login`; auth failure fails open. A refusal for want of credits is treated separately from other failures: `usage_limit_reset()` parses the reset time out of the error text (next local midnight when it names none) and `start_codex_cooldown()` records it in `%TEMP%\challenger-codex-cooldown.json`, which `_run_codex` reads first and returns `None` on without spawning anything. One failed call per exhaustion period rather than one per stop, and it un-gates itself when the quota resets - there is no way to query the balance without spending a request, which is why the failure is the probe. `CHALLENGER_CRITIC=claude` switches to `claude -p` with `CHALLENGER_CRITIC_MODEL` (default `claude-fable-5`), which must be passed `critic-settings.json` or the headless editor re-triggers this same hook.
 
 ## Design notes
 

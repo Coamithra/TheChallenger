@@ -140,6 +140,7 @@ If it reports that the hook allowed the stop, `hook-debug.log` in the repo direc
 
 - `not an enabled project` — the path in `CHALLENGER_PROJECTS` does not match; check for a typo or the wrong separator.
 - `codex editor exited` with an auth message — the user needs to run `codex login` themselves.
+- `codex editor out of credits` / `codex editor skipped: out of credits until ...` — the ChatGPT account has no Codex credits left. The hook has recorded the reset time Codex gave and will not call it again until then; the user can buy credits, switch to `CHALLENGER_CRITIC=claude`, or delete `%TEMP%\challenger-codex-cooldown.json` to retry immediately.
 - `codex: not found` / `claude: not found` — the backend CLI is not on PATH for non-interactive shells.
 
 Every one of these fails open by design: the hook never blocks a session, it just stops editing.

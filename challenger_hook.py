@@ -15,10 +15,12 @@ verbatim. Fails open: any error allows the stop.
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime
 from typing import NoReturn
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -125,6 +127,102 @@ REPOST_INSTRUCTION = (
     "Post your report again verbatim as your next message - the full text, "
     "no additions, no commentary:\n\n"
 )
+
+
+# Codex refuses outright once the account's credits run out, and nothing in the
+# CLI answers "do I have credits left?" without spending a request - so the
+# refusal itself is the check. The first one records the time Codex says the
+# quota returns, and every later turn reads that file and skips the editor for
+# free until then, instead of paying a failed call per stop.
+CODEX_COOLDOWN_PATH = os.path.join(tempfile.gettempdir(), "challenger-codex-cooldown.json")
+USAGE_LIMIT_MARKERS = ("usage limit", "purchase more credits", "quota", "rate limit",
+                       "too many requests", "insufficient_quota")
+_MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+_RESET_AT = re.compile(
+    r"try again at\s+([a-z]{3})[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})"
+    r"(?:[,\s]+(?:at\s+)?(\d{1,2}):(\d{2})\s*([ap])\.?m\.?)?", re.I)
+_RESET_IN = re.compile(r"try again in\s+([^.\n]{1,60})", re.I)
+_UNIT_SECONDS = {"d": 86400, "day": 86400, "h": 3600, "hour": 3600,
+                 "m": 60, "minute": 60, "s": 1, "second": 1}
+
+
+def _parse_reset(text):
+    """Epoch Codex named as the end of the block, or None if it named none.
+
+    Two forms seen in the wild: "try again at Sep 19th, 2026 4:21 PM" and a
+    relative "try again in 3 hours". Both are local time.
+    """
+    m = _RESET_AT.search(text)
+    if m:
+        month = _MONTHS.get(m.group(1).lower())
+        if month:
+            hour, minute = int(m.group(4) or 0), int(m.group(5) or 0)
+            meridiem = (m.group(6) or "").lower()
+            if meridiem == "p" and hour < 12:
+                hour += 12
+            elif meridiem == "a" and hour == 12:
+                hour = 0
+            try:
+                return time.mktime(datetime(int(m.group(3)), month, int(m.group(2)),
+                                            hour, minute).timetuple())
+            except (ValueError, OverflowError):
+                pass
+    m = _RESET_IN.search(text)
+    if m:
+        seconds = sum(
+            int(n) * _UNIT_SECONDS[unit.lower()]
+            for n, unit in re.findall(r"(\d+)\s*(day|hour|minute|second|d|h|m|s)",
+                                      m.group(1), re.I)
+        )
+        if seconds:
+            return time.time() + seconds
+    return None
+
+
+def _next_midnight():
+    """Fallback cooldown end: the shortest wait that is never wrong by over a day."""
+    tomorrow = time.localtime(time.time() + 86400)
+    return time.mktime((tomorrow.tm_year, tomorrow.tm_mon, tomorrow.tm_mday,
+                        0, 0, 0, 0, 0, -1))
+
+
+def usage_limit_reset(text):
+    """Epoch to wait until if `text` is Codex refusing for want of credits, else None."""
+    if not text or not any(marker in text.lower() for marker in USAGE_LIMIT_MARKERS):
+        return None
+    reset = _parse_reset(text)
+    if not reset or reset <= time.time():
+        reset = _next_midnight()
+    return reset
+
+
+def codex_cooldown_until():
+    """Epoch the recorded cooldown expires, or 0 when the editor is free to run."""
+    try:
+        with open(CODEX_COOLDOWN_PATH, encoding="utf-8") as f:
+            until = float(json.load(f).get("until", 0))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return 0
+    if until <= time.time():
+        try:
+            os.remove(CODEX_COOLDOWN_PATH)
+        except OSError:
+            pass
+        return 0
+    return until
+
+
+def start_codex_cooldown(until, detail=""):
+    try:
+        with open(CODEX_COOLDOWN_PATH, "w", encoding="utf-8") as f:
+            json.dump({"until": until, "recorded": time.time(), "detail": detail[-500:]}, f)
+    except OSError:
+        pass
+
+
+def _clock(epoch):
+    return time.strftime("%Y-%m-%d %H:%M", time.localtime(epoch))
 
 
 def draft_link(label, target):
@@ -364,6 +462,10 @@ def _run_claude(prompt):
 
 
 def _run_codex(prompt):
+    cooling = codex_cooldown_until()
+    if cooling:
+        log(f"codex editor skipped: out of credits until {_clock(cooling)}")
+        return None
     fd, path = tempfile.mkstemp(suffix=".md", prefix="challenger-editor-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -386,7 +488,13 @@ def _run_codex(prompt):
         except OSError:
             pass
     if result.returncode != 0:
-        log(f"codex editor exited {result.returncode}: {(result.stderr or result.stdout)[:500]}")
+        output = (result.stderr or "") + (result.stdout or "")
+        reset = usage_limit_reset(output)
+        if reset:
+            start_codex_cooldown(reset, output)
+            log(f"codex editor out of credits; skipping the editor until {_clock(reset)}")
+        else:
+            log(f"codex editor exited {result.returncode}: {output[:500]}")
         return None
     return result.stdout
 
